@@ -86,7 +86,7 @@ if __name__ == '__main__':
             stripped_ilp = cplex.stripFooter(current_ilp)
             ilp_to_generate = prefix + "_annotated.imm.ilp"
             sol_to_generate = prefix + "_annotated.imm.sol"
-            preemption_limit = 5
+            preemption_limit = conflict.kernel_work_units_per_preemption(dir_name)
             conflict.conflict(entry_point_function, tcfg_map_file_name, [], stripped_ilp, ilp_to_generate, dir_name, sol_to_generate, emit_conflicts=True, do_cplex=True, preempt_limit= preemption_limit,default_phantom_preempt=True)
             sys.exit(0)
     bench_ret = bench.bench(dir_name, entry_point_function, gen_heads,load_counts,interactive, False, None, arch)

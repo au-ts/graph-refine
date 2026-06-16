@@ -17,6 +17,21 @@ import graph_refine.trace_refute as trace_refute
 import convert_loop_bounds
 from graph_refine.trace_refute import parse_num_arrow_list
 
+def kernel_work_units_per_preemption(dir_name, default=100):
+    path = os.path.join(dir_name, 'build', 'gen_config', 'kernel', 'gen_config.h')
+    try:
+        f = open(path)
+    except IOError:
+        return default
+    try:
+        for line in f:
+            m = re.match(r'\s*#define\s+CONFIG_MAX_NUM_WORK_UNITS_PER_PREEMPTION\s+(\d+)', line)
+            if m:
+                return int(m.group(1))
+    finally:
+        f.close()
+    return default
+
 global bb_addr_to_ids
 global id_to_bb_addr
 global id_to_context
@@ -487,7 +502,7 @@ def times_limit(fout, addrs,limit):
 
 def conflict(entry_point_function, tcfg_map, conflict_files, old_ilp, new_ilp, dir_name, sol_file, emit_conflicts=False, do_cplex=False, interactive=False, silent_cplex=False, preempt_limit= None, default_phantom_preempt=False):
         if preempt_limit == None:
-            preempt_limit = 5
+            preempt_limit = kernel_work_units_per_preemption(dir_name)
         if default_phantom_preempt:
             conflict_files.append(convert_loop_bounds.phantomPreemptsAnnoFileName(dir_name))
         #initialise graph_to_graph so we get immFunc

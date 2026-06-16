@@ -30,6 +30,8 @@ def phantomPreemptsAnnoFileName(target_dir_name):
     return '%s/preempt_refutes.txt' % target_dir_name
 
 def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
+    # deep recursion when hashing big loop bodies. bench.init resets this
+    sys.setrecursionlimit(max(sys.getrecursionlimit(), 5000))
     if worker_ids == None:
         worker_ids = set([-1])
     print 'target_dir_name: %s' % target_dir_name
@@ -55,7 +57,8 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
             lbfs[f] = {}
         ret= None
         if f in funs_with_phantom_preempt:
-             ret = (64, 'phantom_preempt')
+             # the ILP preemption limit is the real bound
+             ret = (10 ** 9, 'phantom_preempt')
              preempt_annotations_file.write("#" + f + "\n")
              preempt_annotations_file.write("[%s]:phantom_preemp_point\n\n" % hex(head))
 
@@ -80,7 +83,8 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
         else:
             lbfs[f][head] = (ret[0],ret[1], old_worker)
         imm_utils.genLoopheads(lbfs, target_objects.target_dir, incremental_head=(f,head))
-    preempt_annotations_file.close()
+    if funs_with_phantom_preempt:
+        preempt_annotations_file.close()
     unex_unbounded_funcs = set([x for x in funs_with_unbounded_loop if x not in funs_with_phantom_preempt])
     if unex_unbounded_funcs:
         print 'functions with unbounded loop and not bounded by preemption: %s' % str(unex_unbounded_funcs)
