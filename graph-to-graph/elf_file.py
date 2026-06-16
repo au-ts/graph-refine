@@ -12,17 +12,22 @@ from borg import Borg
 #hardcoded list of function(s) that should never be called given correctness
 deadend_funcs = ['halt']
 
+# decompiler addresses are 32 bit
+elf_arch = 'armv7'
+def maskAddr(addr):
+    return addr & 0xffffffff if elf_arch == 'rv64' else addr
+
 class elfFunc:
     def __init__ (self,f_name,f_addr,g_f):
         self.name = f_name
-        self.addr = int(f_addr,16)
+        self.addr = maskAddr(int(f_addr,16))
         # a mapping from addr to line text
         self.lines = {}
         self.g_f = g_f
     def __repr__ (self):
         return ("%s start addr %d %s %d instructions" % (self.name, self.addr,hex(self.addr),len(self.lines) ))
     def append (self,addr, line):
-        self.lines[int(addr,16)] = line
+        self.lines[maskAddr(int(addr,16))] = line
 
 
 class elfSym:

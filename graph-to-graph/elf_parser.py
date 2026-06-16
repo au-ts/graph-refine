@@ -54,7 +54,7 @@ def parseTxt ():
         header = re.search('kernel\.elf:\s*file\s*format\s*elf32-littlearm',line)
         header2 = re.search('Disassembly of section \..*:',line)
       elif elf_arch == 'rv64':
-        header = re.search('kernel\.o:\s*file\s*format\s*elf64-littleriscv', line)
+        header = re.search('kernel\.(elf|o):\s*file\s*format\s*elf64-littleriscv', line)
         header2 = re.search('Disassembly of section \..*:', line)
       else:
         print 'Unsupported arch %s' % elf_arch
@@ -81,7 +81,7 @@ def parseTxt ():
           #print '%s not found in asm_fs' % curr_func_name
         ef.funcs[curr_func_name] = elfFunc(curr_func_name, r.group('f_addr'),g_f)
         elf_fun = ef.funcs[curr_func_name]
-        elf_fun.entry_addr = int(r.group('f_addr'),16);
+        elf_fun.entry_addr = maskAddr(int(r.group('f_addr'),16));
         elf_fun.lines = {}
 
       else:
@@ -94,7 +94,7 @@ def parseTxt ():
                 size = 4
            else:
                 assert False, '%s size undefined' % literal.group('size')
-           line_addr = int(literal.group('addr'),16)
+           line_addr = maskAddr(int(literal.group('addr'),16))
            ef.literals[line_addr] = (size,int(literal.group('value'),16))
            ef.addrs_to_f[line_addr] = curr_func_name
         else:
@@ -102,7 +102,7 @@ def parseTxt ():
             #extract the address, a line looks like f00000ac:>--e5801000 >--str>r1, [r0]
            match = re.search('(?P<line_addr>.*):.*',line)
            assert match !=None, line
-           line_addr = int(match.group('line_addr'),16)
+           line_addr = maskAddr(int(match.group('line_addr'),16))
            elf_fun.lines[line_addr] = line
            #remove everything after ;
 
@@ -122,6 +122,8 @@ def parseElf(dir_name, arch='armv7'):
     ef = elfFile(dir_name)
     global elf_arch
     elf_arch = arch
+    import elf_file
+    elf_file.elf_arch = arch
     parseTxt()
     parseSymTab()
     return ef
