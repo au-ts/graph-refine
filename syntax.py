@@ -1266,8 +1266,15 @@ def check_cfg (fun, warnings = None):
                  if n2 not in fun.nodes and n2 not in ['Ret', 'Err']]
     for (n, n2) in dead_arcs:
         assert type (n2) != str
-        # OK if multiple dead arcs and we save over n2 twice
-        fun.nodes[n2] = Node ('Basic', 'Err', [])
+        # dead arcs go to Err
+        node = fun.nodes[n]
+        if node.kind == 'Cond':
+            if node.left == n2:
+                node.left = 'Err'
+            if node.right == n2:
+                node.right = 'Err'
+        else:
+            node.cont = 'Err'
     if warnings == None:
         print_cfg_warnings ([(fun, n, n2) for (n, n2) in dead_arcs])
     else:
