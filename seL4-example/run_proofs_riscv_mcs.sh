@@ -48,7 +48,7 @@ if [ ! -f "$BV_ROOT/solvers/solvers.done" ]; then
 
     # CVC4 1.8
     echo "Installing solver CVC4..."
-    wget -q https://github.com/CVC4/CVC4/releases/download/1.8/cvc4-1.8-x86_64-linux-opt
+    wget -q https://github.com/CVC4/CVC4-archived/releases/download/1.8/cvc4-1.8-x86_64-linux-opt
     mkdir "$BV_ROOT/solvers/cvc4" -p || true
     mv cvc4-1.8-x86_64-linux-opt "$BV_ROOT/solvers/cvc4/"
     chmod +x "$BV_ROOT/solvers/cvc4/cvc4-1.8-x86_64-linux-opt"
