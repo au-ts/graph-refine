@@ -86,5 +86,11 @@ make_pairings ()
 import inst_logic
 inst_logic.add_inst_specs ()
 
+# boot-only, keep the bound search out
+boot_function_limits = {'init_kernel': 0}
+target_objects.add_hook ('wcet_function_limits', 'boot_limits',
+                         boot_function_limits)
+target_objects.use_hooks.add ('boot_limits')
+
 print 'Checking.'
 syntax.check_funs (functions)
