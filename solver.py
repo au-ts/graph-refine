@@ -1069,6 +1069,11 @@ class Solver:
     def write_solv_script(self, input_msgs, solver = slow_solver,
                           only_if_is_model = False):
         hasher = hashlib.sha256()
+        # another worker may have made it already
+        try:
+            os.makedirs ('./logs/tmp/')
+        except OSError:
+            pass
         # write to tmp file (avoids writing into a file being read in parallel)
         (tmpfd, tmpfilename) = tempfile.mkstemp(suffix='.smt2',
                                                 dir="./logs/tmp/", prefix='temporary-')
