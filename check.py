@@ -35,7 +35,6 @@ def build_problem (pairing, force_inline = None, avoid_abort = False):
     inline_completely_unmatched (p, skip_underspec = avoid_abort)
 
     # now do any C inlining
-    assert avoid_abort == False
     inline_reachable_unmatched_C (p, force_inline,
                                   skip_underspec = avoid_abort)
 
@@ -54,8 +53,10 @@ def inline_completely_unmatched (p, ref_tags = None, skip_underspec = False):
     if ref_tags == None:
         ref_tags = p.pairing.tags
     while True:
+        # skipped functions have no body
         ns = [(n, skip_underspec
-               and not functions[p.nodes[n].fname].entry)
+               and (p.nodes[n].fname not in functions
+                    or not functions[p.nodes[n].fname].entry))
               for n in p.nodes
               if p.nodes[n].kind == 'Call'
               if not [pair for pair
@@ -122,7 +123,9 @@ def consider_inline1 (p, n, matched_funs, inline_tag,
 
     f_nm = node.fname
 
-    if skip_underspec and not functions[f_nm].entry:
+    # skipped functions have no body
+    if skip_underspec and (f_nm not in functions
+                           or not functions[f_nm].entry):
         trace ('Skipping inlining underspecified %s' % f_nm)
         return False
     if f_nm not in matched_funs or (force_inline and force_inline (f_nm)):

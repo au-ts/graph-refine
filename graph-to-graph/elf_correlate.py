@@ -392,6 +392,9 @@ class immFunc (Borg):
                 return False
             if f in elfFile().deadend_funcs:
               return True
+            if f not in self.f_problems:
+                print 'isDeadend: no problem for callee %s, assuming live' % f
+                return False
             p_callee = self.f_problems[f]
             assert len(p_callee.entries) == 1
             p_callee_n = p_callee.entries[0][0]
@@ -441,6 +444,12 @@ class immFunc (Borg):
         if isCall(p_node):
           assert may_call
           fun_called = self.funName(p_nf)
+          if fun_called not in self.f_problems:
+              # step over calls to skipped or stub functions
+              print 'pNodeConts: no problem for callee %s, skipping call' % fun_called
+              p_conts = filter(lambda x: x != 'Err', p_node.get_conts())
+              pf_conts = [(x, f) for x in p_conts]
+              return p_node, pf_conts
           p = self.f_problems[fun_called]
           entry = self.p_entries[fun_called]
           pf_conts = [(entry,fun_called)]

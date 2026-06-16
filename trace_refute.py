@@ -544,6 +544,8 @@ def build_reachable_functions ():
     frontier = uncalled
     while frontier:
         f = frontier.pop ()
+        if f not in is_reachable:
+            continue
         if is_reachable[f]:
             continue
         elif function_limit (f) == 0:
@@ -555,9 +557,9 @@ def build_reachable_functions ():
     reachable_functions[('IsLoaded', None)] = True
 
 def function_reachable_within_limits (fname):
-    if fname not in reachable_functions:
+    if not reachable_functions:
         build_reachable_functions ()
-    return reachable_functions[fname]
+    return reachable_functions.get (fname, False)
 
 def ctxt_within_function_limits (call_ctxt):
     for (i, addr) in enumerate (call_ctxt):

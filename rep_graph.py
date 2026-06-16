@@ -711,19 +711,27 @@ class GraphSlice:
             nm = self.success_name (node.fname, n)
             success = self.solv.add_var (nm, boolT)
             success = mk_smt_expr (success, boolT)
-            fun = functions[node.fname]
+            # skipped function, take the signature from the call
+            if node.fname in functions:
+                fun = functions[node.fname]
+                fun_inputs = fun.inputs
+                fun_outputs = fun.outputs
+            else:
+                fun_inputs = [('input%d' % i, arg.typ)
+                              for (i, arg) in enumerate (node.args)]
+                fun_outputs = list (node.rets)
 
             ins = dict ([((x, typ), smt_expr (app_eqs (arg), env, self.solv))
-                         for ((x, typ), arg) in azip (fun.inputs, node.args)])
+                         for ((x, typ), arg) in azip (fun_inputs, node.args)])
             mem_name = None
-            for (x, typ) in reversed (fun.inputs):
+            for (x, typ) in reversed (fun_inputs):
                 if typ == builtinTs['Mem']:
                     inp_mem = ins[(x, typ)]
                     mem_name = (node.fname, inp_mem)
             mem_calls = self.scan_mem_calls (ins)
             mem_calls = self.add_mem_call (node.fname, mem_calls)
             outs = {}
-            for ((x, typ), (y, typ2)) in azip (node.rets, fun.outputs):
+            for ((x, typ), (y, typ2)) in azip (node.rets, fun_outputs):
                 assert typ2 == typ
                 if self.fast_const_ret (n[0], x, typ):
                     outs[(y, typ2)] = env [(x, typ)]
@@ -733,7 +741,7 @@ class GraphSlice:
                                               mem_name = mem_name,
                                               mem_calls = mem_calls)
                 outs[(y, typ2)] = env[(x, typ)]
-            for ((x, typ), (y, _)) in azip (node.rets, fun.outputs):
+            for ((x, typ), (y, _)) in azip (node.rets, fun_outputs):
                 z = self.var_rep_request ((x, typ),
                                           'Call', n, env)
                 if z != None:

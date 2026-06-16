@@ -1223,13 +1223,13 @@ def interesting_node_exprs (p, n, tags = None, use_pairings = True):
         tag = p.node_tags[n][0]
         from target_objects import functions, pairings
         import solver
-        fun = functions[node.fname]
-        arg_input_map = dict (azip (fun.inputs, node.args))
         pairs = [pair for pair in pairings.get (node.fname, [])
                  if pair.tags == tags]
         if not pairs:
             return vs
         [pair] = pairs
+        fun = functions[node.fname]
+        arg_input_map = dict (azip (fun.inputs, node.args))
         in_eq_vs = [(('Call', pair.name, i),
                      var_subst (v, arg_input_map))
                     for (i, ((lhs, l_s), (rhs, r_s)))

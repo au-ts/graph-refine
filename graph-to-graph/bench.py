@@ -32,6 +32,8 @@ fast_path = [
 
 dummy_funs = [
 'idle_thread', 'halt',
+# keep in sync with skip_functions in target-RISCV64.py
+'c_handle_syscall', 'init_freemem', 'fastpath_reply_recv',
 ] + fast_path
 
 #funs called by boot_funs only

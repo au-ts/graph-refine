@@ -1214,7 +1214,10 @@ def get_functions_with_tag (tag):
     while visit:
         f = visit.pop ()
         funs.add (f)
-        visit.update (set (functions[f].function_calls ()) - funs)
+        # skipped functions have no body
+        if f in functions:
+            visit.update (set (functions[f].function_calls ()) - funs)
+    funs = set ([f for f in funs if f in functions])
     funs_with_tag[tag] = funs
     return funs
 
