@@ -4,5 +4,10 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-.pyc
+*.pyc
 /internal/
+hol4_output.txt
+poly_output.txt
+/.solverlist
+logs/
+.sel4-venv/
