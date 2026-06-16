@@ -1389,7 +1389,7 @@ def problematic_synthetic ():
     synth_stack = set ([f for f in synth_calls
                         if [node for node in functions[f].nodes.itervalues ()
                             if node.kind == 'Basic'
-                            if (synax.arch.sp_register, syntax.arch.word_type) in node.get_lvals ()]])
+                            if (syntax.arch.sp_register, syntax.arch.word_type) in node.get_lvals ()]])
 
     printout ('Synthetic symbols which call and move sp: %s'
               % synth_stack)
