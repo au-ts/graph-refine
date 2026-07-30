@@ -381,7 +381,17 @@ def get_entry_visits_up_to (rep, head, restrs, hyps):
     if k in rep.p.cached_analysis:
         return rep.p.cached_analysis[k]
 
-    [entry] = get_loop_entry_sites (rep, restrs, hyps, head)
+    entries = get_loop_entry_sites (rep, restrs, hyps, head)
+    # loop is unreachable
+    ext_preds = [n for n2 in rep.p.loop_body (head)
+                 for n in rep.p.preds[n2]
+                 if rep.p.loop_id (n) == None]
+    if not entries and ext_preds:
+        rep.p.cached_analysis[k] = set ()
+        return set ()
+    assert len (entries) == 1, ('loop %d has %d reachable entry sites'
+                                % (head, len (entries)))
+    [entry] = entries
     frontier = set ([entry])
     up_to = set ()
     loop = rep.p.loop_body (head)
