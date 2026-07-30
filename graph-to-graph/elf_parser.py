@@ -111,11 +111,13 @@ def parseTxt ():
            ef.lines[line_addr] = line
            ef.addrs_to_f[line_addr] = curr_func_name
 
-#is the mnemonic b ? bl, bx etc don't count
-#used to detect tail call
+# a plain jump (b/bx on armv7, j/jr on rv64) marks a tail call
 def isDirectBranch(addr):
   inst = elfFile().lines[addr]
-  match = re.search(r'[a-f0-9]+:\s*[a-f0-9]+\s+(b|bx)\s+.*',inst)
+  if elf_arch == 'rv64':
+    match = re.search(r'[a-f0-9]+:\s*[a-f0-9]+\s+(j|jr)\s+.*',inst)
+  else:
+    match = re.search(r'[a-f0-9]+:\s*[a-f0-9]+\s+(b|bx)\s+.*',inst)
   return match is not None
 
 def parseElf(dir_name, arch='armv7'):
