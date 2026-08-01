@@ -464,7 +464,7 @@ def problem_hash (p):
                                  sorted (p.outputs.iteritems ()), sorted (p.nodes.iteritems ())])
 
 def search_bin_bound (p, restrs, hyps, split):
-    trace ('Searching for bound for 0x%x in %s.', (split, p.name))
+    trace ('Searching for bound for 0x%x in %s.' % (split, p.name))
     bound = search_bound (p, restrs, hyps, split)
     if bound:
         return bound
