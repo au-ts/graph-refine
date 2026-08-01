@@ -113,7 +113,9 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
         print ('functions with unbounded loop and not bounded by preemption: %s'
                % ', '.join('%s@%s' % (f, hex(head))
                             for (f, head) in sorted(unex_unbounded_funcs)))
-        return None
+        # failing a worker would abort the others
+        if -1 in worker_ids:
+            return None
     return lbfs
 
 if __name__== '__main__':
