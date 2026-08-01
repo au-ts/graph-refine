@@ -81,6 +81,9 @@ def load_target (target, target_args = None):
     target_dir.set_dir (target)
     if target_args != None:
         target_args.extend (target_args)
+    import syntax
+    if syntax.arch is None:
+        syntax.set_arch ()
     package = '.'.join (__name__.split ('.')[:-1])
     if package:
         pck = sys.modules[package]

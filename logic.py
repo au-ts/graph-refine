@@ -78,6 +78,27 @@ def mk_mem_eqs (a_imem, c_imem, a_omem, c_omem, tags):
 
     return (ieqs, oeqs)
 
+def mk_fun_eqs (as_f, c_f, prunes = None):
+    (var_a_args, a_imem, glob_a_args) = split_scalar_pairs (as_f.inputs)
+    (var_c_args, c_imem, glob_c_args) = split_scalar_pairs (c_f.inputs)
+    (var_a_rets, a_omem, glob_a_rets) = split_scalar_pairs (as_f.outputs)
+    (var_c_rets, c_omem, glob_c_rets) = split_scalar_pairs (c_f.outputs)
+
+    (mem_ieqs, mem_oeqs) = mk_mem_eqs (a_imem, c_imem, a_omem, c_omem, ['ASM', 'C'])
+
+    if not prunes:
+        prunes = (var_a_args, var_a_args)
+    assert len (prunes[0]) == len (var_c_args), (var_a_args,
+                                                 var_c_args, prunes)
+    a_map = dict (azip (prunes[1], var_a_args))
+    ivar_pairs = [((a_map[p], 'ASM_IN'), (c, 'C_IN')) for (p, c)
+                  in azip (prunes[0], var_c_args) if p in a_map]
+
+    ovar_pairs = [((a_ret, 'ASM_OUT'), (c_ret, 'C_OUT')) for (a_ret, c_ret)
+                  in azip (var_a_rets, var_c_rets)]
+    return (map (syntax.arch.cast_pair, mem_ieqs + ivar_pairs),
+            map (syntax.arch.cast_pair, mem_oeqs + ovar_pairs))
+
 def mk_var_list (vs, typ):
     return [syntax.mk_var (v, typ) for v in vs]
 
@@ -212,6 +233,11 @@ class Pairing:
 
     def __ne__ (self, other):
         return not other or not self == other
+
+def mk_pairing (functions, c_f, as_f, prunes = None):
+    fs = (functions[as_f], functions[c_f])
+    eqs = mk_fun_eqs (fs[0], fs[1], prunes = prunes)
+    return Pairing (['ASM', 'C'], {'C': c_f, 'ASM': as_f}, eqs)
 
 def inst_eqs_pattern (pattern, params):
     (pat_params, inp_eqs, out_eqs) = pattern
