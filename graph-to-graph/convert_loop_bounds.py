@@ -11,6 +11,7 @@ from graph_refine.target_objects import functions
 import graph_refine.problem as problem
 import imm_utils
 import sys
+import traceback
 
 def isPhantomHead(funs_with_phantom_preempt, f, head):
     return head in funs_with_phantom_preempt.get(f, [])
@@ -88,6 +89,10 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
                     known_bound_only = cached_only)
             except problem.Abort, e:
                 print 'failed to analyse %s, problem aborted' % f
+            except AssertionError, e:
+                # uncuttable fused cycle, record the head as failed
+                traceback.print_exc()
+                print 'failed to analyse %s, assertion failure: %s' % (f, e)
             except:
                 print "Unexpected error:", sys.exc_info()
                 raise
