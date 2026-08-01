@@ -509,19 +509,7 @@ def rab_test ():
 
 last_search_bound = [0]
 
-def search_bound (p, restrs, hyps, split):
-    last_search_bound[0] = (p, restrs, hyps, split)
-
-    # try a naive bin search first
-    # limit this to a small bound for time purposes
-    #   - for larger bounds the less naive approach can be faster
-    bound = findLoopBoundBS(split, p, restrs=restrs, hyps=hyps,
-                            try_seq = [0, 1, 6])
-    if bound != None:
-        return (bound, 'NaiveBinSearch')
-
-    l_hyps = get_linear_series_hyps (p, split, restrs, hyps)
-
+def inductive_bin_search (p, split, restrs, hyps, l_hyps):
     rep = rep_graph.mk_graph_slice (p, fast = True)
 
     def test (n):
@@ -537,6 +525,27 @@ def search_bound (p, restrs, hyps, split):
     max_bound = max_acceptable_bound[0]
     bound = upDownBinSearch (min_bound, max_bound, test)
     if bound != None and test (bound):
+        return bound
+    return None
+
+def search_bound (p, restrs, hyps, split):
+    last_search_bound[0] = (p, restrs, hyps, split)
+
+    # a head that does not cut its own body is left to the C fallback
+    if problem.has_inner_loop (p, split):
+        return None
+
+    # try a naive bin search first
+    # limit this to a small bound for time purposes
+    #   - for larger bounds the less naive approach can be faster
+    bound = findLoopBoundBS(split, p, restrs=restrs, hyps=hyps,
+                            try_seq = [0, 1, 6])
+    if bound != None:
+        return (bound, 'NaiveBinSearch')
+
+    l_hyps = get_linear_series_hyps (p, split, restrs, hyps)
+    bound = inductive_bin_search (p, split, restrs, hyps, l_hyps)
+    if bound != None:
         return (bound, 'InductiveBinSearch')
 
     # let the naive bin search go a bit further
