@@ -4,4 +4,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-/target/
+/target/*
+!/target/*/
+/target/*/*
+!/target/*/phantom_preempt.py
+!/target/*/assumed_loop_bounds.py
