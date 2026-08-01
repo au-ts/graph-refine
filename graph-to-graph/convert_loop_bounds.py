@@ -48,8 +48,18 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
     execfile('%s/phantom_preempt.py' % target_dir,context)
     funs_with_phantom_preempt = context['functions']
     for f in sorted(funs_with_phantom_preempt):
-        heads = sorted(lbfs.get(f, {}))
-        if funs_with_phantom_preempt[f] is True and len(heads) > 1:
+        v = funs_with_phantom_preempt[f]
+        if f not in lbfs:
+            print ('WARNING: %s is in phantom_preempt.py but has no loop heads in '
+                   'loop_counts.py' % f)
+            continue
+        heads = sorted(lbfs[f])
+        if isinstance(v, list):
+            for head in v:
+                if head not in lbfs[f]:
+                    print ('WARNING: phantom_preempt.py lists %s head %s, which is '
+                           'not a loop head' % (f, hex(head)))
+        elif v is True and len(heads) > 1:
             print ('WARNING: %s is True in phantom_preempt.py but has %d loop heads (%s), '
                    'list the ones that contain a preemptionPoint'
                    % (f, len(heads), ' '.join(map(hex, heads))))
