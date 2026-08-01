@@ -419,6 +419,11 @@ def get_bound_ctxt (split, call_ctxt, use_cache = True):
     split_bin_addr = min ([addr for addr in addr_map
                            if p.loop_id (addr_map[addr]) == split])
 
+    # an uncut inner cycle makes warm_pc_env_cache loop forever
+    if problem.has_inner_loop (p, split):
+        if logic.get_one_loop_splittable (p, set (p.loop_body (split))) == None:
+            problem.check_no_inner_loop (p, split)
+
     prior = get_prior_loop_heads (p, split)
     restrs = ()
     prev_bounds = []
