@@ -184,6 +184,8 @@ def tryLoopBound(p_n, p, bounds,rep,restrs =None, hints =None,kind = 'Number',bi
     return -1
     assert False, 'failed to find loop bound for p_n %d' % p_n
 
+group_retry_limit = [16]
+
 def get_linear_series_eqs (p, split, restrs, hyps, omit_standard = False):
     k = ('linear_series_eqs', split, restrs, tuple (hyps))
     if k in p.cached_analysis:
@@ -222,6 +224,15 @@ def get_linear_series_eqs (p, split, restrs, hyps, omit_standard = False):
             failed = []
         else:
             failed.append (cand)
+
+    # some candidates only hold together, retry failures as a group
+    if len (failed) <= group_retry_limit[0]:
+        while failed:
+            bad = [c for c in failed if not do_checks (eqs + failed, [c])]
+            if not bad:
+                eqs += failed
+                break
+            failed = [c for c in failed if c not in bad]
 
     assert do_checks ([], eqs)
     p.cached_analysis[k] = eqs
