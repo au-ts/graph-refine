@@ -260,6 +260,9 @@ max_active_solvers = [5]
 random_name = random.randrange (1, 10 ** 9)
 count = [0]
 
+# GRAPH_REFINE_SMT_DUMPS=0 deletes query files
+keep_smt_dumps = os.environ.get ('GRAPH_REFINE_SMT_DUMPS', '1') != '0'
+
 # the token_smt_typ is uniformly 64-bit across all architectures
 token_smt_typ = syntax.word64T
 
@@ -1098,6 +1101,8 @@ class Solver:
             hasher.update(msg)
         tmpfile_write.close()
         os.close(tmpfd)
+        if not keep_smt_dumps:
+            return tmpfilename
         # atomic move file to its permanent location (named by problem hash)
         sha256sum = hasher.hexdigest()
         filename = './logs/tmp/%s.smt2' % sha256sum
@@ -1121,6 +1126,8 @@ class Solver:
                                  stdin = fd, stdout = subprocess.PIPE,
                                  preexec_fn = preexec (timeout))
         fd.close()
+        if not keep_smt_dumps:
+            os.unlink(filename)
         execution = OfflineSolverExecution(solver, proc, filename)
         return execution
 
