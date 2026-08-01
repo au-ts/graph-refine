@@ -445,9 +445,17 @@ def split_loop_hyps (tags, split, restrs, exit):
                    for (hyp, _) in split_hyps_at_visit (tags, split, restrs, offs)]
 
 def loops_to_split (p, restrs):
-    loop_heads_with_split = set ([p.loop_id (n)
-                                  for (n, visit_set) in restrs])
-    rem_loop_heads = set (p.loop_heads ()) - loop_heads_with_split
+    # an uncut inner cycle makes warm_pc_env_cache loop forever
+    restr_ns = set ([n for (n, visit_set) in restrs])
+    loop_heads_with_split = set ([p.loop_id (n) for n in restr_ns])
+    outer_heads = set (p.loop_heads ())
+    rem_loop_heads = set ()
+    for h in problem.loop_heads_including_inner (p):
+        if h in outer_heads:
+            if p.loop_id (h) not in loop_heads_with_split:
+                rem_loop_heads.add (h)
+        elif h not in restr_ns:
+            rem_loop_heads.add (h)
     for (n, visit_set) in restrs:
         if not visit_set.has_zero ():
             # n must be visited, so loop heads must be
