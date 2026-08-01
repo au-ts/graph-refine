@@ -755,7 +755,8 @@ def loop_body_inner_loops (p, head, loop_body):
 
     comps = logic.tarjan (graph, [head])
     assert sum ([1 + len (t) for (_, t) in comps]) == len (loop_set_all)
-    return [comp for comp in comps if comp[1]]
+    # single-node cycle
+    return [comp for comp in comps if comp[1] or comp[0] in graph[comp[0]]]
 
 def loop_inner_loops (p, head):
     k = ('inner_loop_set', head)
