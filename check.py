@@ -582,8 +582,8 @@ def split_checks (p, restrs, hyps, split, tags = None):
             + split_induct_step_checks (p, restrs, hyps, split, tags = tags))
 
 def loop_eq_hyps_at_visit (tag, split, eqs, restrs, visit_num,
-                           use_if_at = False):
-    details = (split, (0, 1), eqs)
+                           use_if_at = False, seq_start = 0):
+    details = (split, (seq_start, 1), eqs)
     visit = split_visit_one_visit (tag, details, restrs, visit_num)
     start = split_visit_one_visit (tag, details, restrs, vc_num (0))
 
@@ -610,9 +610,10 @@ def single_induct_resulting_hyp (p, restrs, rev_induct_args):
     vis = ((point, restrs + tuple ([(point, vc_num (0))])), tag)
     return rep_graph.true_if_at_hyp (pred, vis)
 
-def single_loop_induct_base_checks (p, restrs, hyps, tag, split, n, eqs):
+def single_loop_induct_base_checks (p, restrs, hyps, tag, split, n, eqs,
+                                    seq_start = 0):
     tests = []
-    details = (split, (0, 1), eqs)
+    details = (split, (seq_start, 1), eqs)
     for i in range (n + 1):
         reach = split_visit_one_visit (tag, details, restrs, vc_num (i))
         nhyps = [pc_true_hyp (reach)]
@@ -620,24 +621,26 @@ def single_loop_induct_base_checks (p, restrs, hyps, tag, split, n, eqs):
                         'Base check (%s, %d) at induct step for %d'
                         % (desc, i, split))
                        for (hyp, desc) in loop_eq_hyps_at_visit (tag, split,
-                                                                 eqs, restrs, vc_num (i))])
+                                                                 eqs, restrs, vc_num (i),
+                                                                 seq_start = seq_start)])
     return tests
 
 def single_loop_induct_step_checks (p, restrs, hyps, tag, split, n,
-                                    eqs, eqs_assume = None):
+                                    eqs, eqs_assume = None, seq_start = 0):
     if eqs_assume == None:
         eqs_assume = []
-    details = (split, (0, 1), eqs_assume + eqs)
+    details = (split, (seq_start, 1), eqs_assume + eqs)
     cont = split_visit_one_visit (tag, details, restrs, vc_offs (n))
     hyps = ([pc_true_hyp (cont)] + hyps
             + [h for i in range (n)
                for (h, _) in loop_eq_hyps_at_visit (tag, split,
-                                                    eqs_assume + eqs, restrs, vc_offs (i))])
+                                                    eqs_assume + eqs, restrs, vc_offs (i),
+                                                    seq_start = seq_start)])
 
     return [(hyps, hyp, 'Induct check (%s) at inductive step for %d'
             % (desc, split))
             for (hyp, desc) in loop_eq_hyps_at_visit (tag, split, eqs,
-            restrs, vc_offs (n))]
+            restrs, vc_offs (n), seq_start = seq_start)]
 
 def mk_loop_counter_eq_hyp (p, split, restrs, n):
     details = (split, (0, 1), [])

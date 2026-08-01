@@ -1349,7 +1349,7 @@ def derive_case_split (rep, n_vcs, checks):
     [(n, vc)] = test_n_vcs
     return ('CaseSplit', ((n, tag), [n]))
 
-def mk_seq_eqs (p, split, step, with_rodata):
+def mk_seq_eqs (p, split, step, with_rodata, va = None):
     # eqs take the form of a number of constant expressions
     eqs = []
 
@@ -1361,7 +1361,9 @@ def mk_seq_eqs (p, split, step, with_rodata):
     else:
         minus_loop_step = mk_times (loop, synatx.arch.mk_word(- step))
 
-    for (var, data) in get_loop_var_analysis_at (p, split):
+    if va == None:
+        va = get_loop_var_analysis_at (p, split)
+    for (var, data) in va:
         if data == 'LoopVariable':
             if with_rodata and var.typ == builtinTs['Mem']:
                 eqs.append (logic.mk_rodata (var))

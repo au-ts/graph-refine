@@ -186,25 +186,29 @@ def tryLoopBound(p_n, p, bounds,rep,restrs =None, hints =None,kind = 'Number',bi
 
 group_retry_limit = [16]
 
-def get_linear_series_eqs (p, split, restrs, hyps, omit_standard = False):
-    k = ('linear_series_eqs', split, restrs, tuple (hyps))
+def get_linear_series_eqs (p, split, restrs, hyps, omit_standard = False,
+                           peel = 0, va = None, va_key = None):
+    # va is unhashable
+    k = ('linear_series_eqs', split, restrs, tuple (hyps), peel, va_key)
     if k in p.cached_analysis:
         if omit_standard:
-            standard = set (search.mk_seq_eqs (p, split, 1, with_rodata = False))
+            standard = set (search.mk_seq_eqs (p, split, 1, with_rodata = False, va = va))
             return set (p.cached_analysis[k]) - standard
         return p.cached_analysis[k]
 
-    cands = search.mk_seq_eqs (p, split, 1, with_rodata = False)
-    cands += candidate_additional_eqs (p, split)
+    cands = search.mk_seq_eqs (p, split, 1, with_rodata = False, va = va)
+    cands += candidate_additional_eqs (p, split, va = va,
+                                       with_conds = (peel != 0))
     (tag, _) = p.node_tags[split]
 
     rep = rep_graph.mk_graph_slice (p, fast = True)
 
     def do_checks (eqs_assume, eqs):
         checks = (check.single_loop_induct_step_checks (p, restrs, hyps, tag,
-                                                        split, 1, eqs, eqs_assume = eqs_assume)
+                                                        split, 1, eqs, eqs_assume = eqs_assume,
+                                                        seq_start = peel)
                   + check.single_loop_induct_base_checks (p, restrs, hyps, tag,
-                                                          split, 1, eqs))
+                                                          split, 1, eqs, seq_start = peel))
 
         groups = check.proof_check_groups (checks)
         for group in groups:
@@ -237,21 +241,23 @@ def get_linear_series_eqs (p, split, restrs, hyps, omit_standard = False):
     assert do_checks ([], eqs)
     p.cached_analysis[k] = eqs
     if omit_standard:
-        standard = set (search.mk_seq_eqs (p, split, 1, with_rodata = False))
+        standard = set (search.mk_seq_eqs (p, split, 1, with_rodata = False, va = va))
         return set (eqs) - standard
     return eqs
 
-def get_linear_series_hyps (p, split, restrs, hyps):
-    eqs = get_linear_series_eqs (p, split, restrs, hyps)
+def get_linear_series_hyps (p, split, restrs, hyps, peel = 0, va = None,
+                            va_key = None):
+    eqs = get_linear_series_eqs (p, split, restrs, hyps, peel = peel, va = va,
+                                 va_key = va_key)
     (tag, _) = p.node_tags[split]
     hyps = [h for (h, _) in check.loop_eq_hyps_at_visit (tag, split, eqs,
-                                                         restrs, vc_offs (0))]
+                                                         restrs, vc_offs (0), seq_start = peel)]
     return hyps
 
 def is_zero (expr):
     return expr.kind == 'Num' and expr.val & ((1 << expr.typ.num) - 1) == 0
 
-def candidate_additional_eqs (p, split):
+def candidate_additional_eqs (p, split, va = None, with_conds = False):
 
     eq_vals = set ()
     def visitor (expr):
@@ -272,8 +278,9 @@ def candidate_additional_eqs (p, split):
     loop = syntax.mk_var ('%i', syntax.arch.word_type)
     minus_loop_step = syntax.mk_uminus (loop)
 
-    vas = search.get_loop_var_analysis_at(p, split)
-    ls_vas = dict ([(var, [data]) for (var, data) in vas
+    if va == None:
+        va = search.get_loop_var_analysis_at (p, split)
+    ls_vas = dict ([(var, [data]) for (var, data) in va
                     if data[0] == 'LoopLinearSeries'])
     cmp_series = [(x, y, rew, offs) for (x, y) in eq_vals
                   for (_, rew, offs) in ls_vas.get (x, [])]
@@ -290,11 +297,54 @@ def candidate_additional_eqs (p, split):
 
     ass_eqs = []
     var_deps = p.compute_var_dependencies ()
+
+    if with_conds:
+        # also the loop's branch conditions over variables live at the head
+        head_vars = set (var_deps[split])
+        odd_eqs += [p.nodes[n].cond for n in p.loop_body (split)
+                    if p.nodes[n].kind == 'Cond'
+                    if logic.all_vars_in_set (p.nodes[n].cond, head_vars)]
+
+
     for hook in target_objects.hooks ('extra_wcet_assertions'):
         for assn in hook (var_deps[split]):
             ass_eqs.append (assn)
 
     return odd_eqs + ass_eqs
+
+max_peel_speculations = [8]
+
+def peel_speculations (p, split):
+    # branch targets in the loop that are not on every cycle through it
+    loop = p.loop_body (split)
+    splittable = p.get_loop_splittables (split)
+    dead = []
+    seen = set ([split])
+    frontier = [split]
+    while frontier:
+        n = frontier.pop (0)
+        node = p.nodes[n]
+        conts = [c for c in node.get_conts () if c in loop]
+        if node.kind == 'Cond' and len (conts) == 2:
+            for c in conts:
+                if c not in splittable and c not in dead:
+                    dead.append (c)
+        for c in conts:
+            if c not in seen:
+                seen.add (c)
+                frontier.append (c)
+    return dead[: max_peel_speculations[0]]
+
+def peeled_var_analysis (p, split, dead):
+    k = ('peeled_loop_var_analysis', split, dead)
+    if k not in p.cached_analysis:
+        var_deps = p.compute_var_dependencies ()
+        p.cached_analysis[k] = logic.compute_loop_var_analysis (p, var_deps,
+                                    split, impossible = {dead: True})
+    va = p.cached_analysis[k]
+    if not [d for (v, d) in va if d[0] == 'LoopLinearSeries']:
+        return None
+    return va
 
 extra_loop_consts = [2 ** 16]
 
@@ -539,6 +589,23 @@ def inductive_bin_search (p, split, restrs, hyps, l_hyps):
         return bound
     return None
 
+peel_try_seq = [[1]]
+
+def search_peeled_bound (p, restrs, hyps, split):
+    for dead in peel_speculations (p, split):
+        va = peeled_var_analysis (p, split, dead)
+        if va == None:
+            continue
+        for peel in peel_try_seq[0]:
+            l_hyps = get_linear_series_hyps (p, split, restrs, hyps,
+                                             peel = peel, va = va,
+                                             va_key = dead)
+            n = inductive_bin_search (p, split, restrs, hyps, l_hyps)
+            if n != None:
+                # index 0 of the peeled series is visit peel
+                return (n + peel, 'PeeledInductiveBinSearch')
+    return None
+
 def search_bound (p, restrs, hyps, split):
     last_search_bound[0] = (p, restrs, hyps, split)
 
@@ -563,6 +630,10 @@ def search_bound (p, restrs, hyps, split):
     bound = findLoopBoundBS(split, p, restrs=restrs, hyps=hyps)
     if bound != None:
         return (bound, 'NaiveBinSearch')
+
+    bound = search_peeled_bound (p, restrs, hyps, split)
+    if bound != None:
+        return bound
 
     return None
 
@@ -880,6 +951,7 @@ bound_kind_nums = {
     'InductiveBinSearch': 4,
     'FromC': 5,
     'MergedBound': 6,
+    'PeeledInductiveBinSearch': 8,
 }
 
 gnuplot_colours = [

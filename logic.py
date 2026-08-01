@@ -932,7 +932,8 @@ def compute_var_deps (nodes, outputs, preds, override_lvals_rvals = {},
 
     return var_deps
 
-def compute_loop_var_analysis (p, var_deps, n, override_nodes = None):
+def compute_loop_var_analysis (p, var_deps, n, override_nodes = None,
+                               impossible = None):
     if override_nodes == None:
         nodes = p.nodes
     else:
@@ -945,7 +946,8 @@ def compute_loop_var_analysis (p, var_deps, n, override_nodes = None):
                      for v in var_deps[n2] if v not in upd_vs])
 
     vca = compute_var_cycle_analysis (p, nodes, n,
-                                      const_vs, set (var_deps[n]))
+                                      const_vs, set (var_deps[n]),
+                                      impossible = impossible)
     vca = [(syntax.mk_var (nm, typ), data)
            for ((nm, typ), data) in vca.items ()]
     return vca
@@ -954,14 +956,15 @@ cvca_trace = []
 cvca_diag = [False]
 no_accum_expressions = set ()
 
-def compute_var_cycle_analysis (p, nodes, n, const_vars, vs, diag = None):
+def compute_var_cycle_analysis (p, nodes, n, const_vars, vs, diag = None,
+                                impossible = None):
 
     if diag == None:
         diag = cvca_diag[0]
 
     cache = {}
     del cvca_trace[:]
-    impossible_nodes = {}
+    impossible_nodes = dict (impossible) if impossible else {}
     loop = p.loop_body (n)
 
     def warm_cache_before (n2, v):
