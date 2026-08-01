@@ -1352,7 +1352,6 @@ class Solver:
         arg = ('sat', dict (model))
         while True:
             res = self.check_model_iteration(hyps, state, arg)
-            (kind, details) = res
             if isinstance(res, CMIAbort):
                 return False
             if isinstance(res, CMIResult):
@@ -1362,7 +1361,8 @@ class Solver:
             assert isinstance(res, CMIContinue)
             state = res.state
             m = typed_commons.PersistableModel({})
-            model_repair_result = self.hyps_sat_raw(res.next_hypotheses, model = m,
+            tagged_hyps = [(h, None) for h in res.next_hypotheses]
+            model_repair_result = self.hyps_sat_raw(tagged_hyps, model = m,
                                                     force_solv = res.next_solver, recursion = True)
             arg = (model_repair_result, m)
 
