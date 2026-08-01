@@ -5,6 +5,7 @@
 #
 
 import check,search,problem,syntax,solver,logic,rep_graph,re
+import os
 from rep_graph import vc_num, vc_offs, pc_true_hyp, Hyp, eq_hyp
 from target_objects import functions, trace
 from check import restr_others,split_visit_one_visit
@@ -391,6 +392,13 @@ def serialise_bound (addr, bound_info):
         assert str (kind) == kind
         return [hex (addr), str (bound), kind]
 
+# single O_APPEND write so workers don't interleave
+def append_loop_bounds (data):
+    fd = os.open ('%s/LoopBounds.txt' % target_objects.target_dir,
+                  os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0644)
+    os.write (fd, data)
+    os.close (fd)
+
 def save_bound (glob, split_bin_addr, call_ctxt, prob_hash, prev_bounds, bound,
                 time = None):
     f_names = [trace_refute.get_body_addrs_fun (x)
@@ -409,22 +417,18 @@ def save_bound (glob, split_bin_addr, call_ctxt, prob_hash, prev_bounds, bound,
         for (split, bound) in prev_bounds:
             ss += serialise_bound (split, bound)
     s = ' '.join (ss)
-    f = open ('%s/LoopBounds.txt' % target_objects.target_dir, 'a')
-    f.write (comment + '\n')
-    f.write (s + '\n')
+    data = comment + '\n' + s + '\n'
     if time != None:
         ctxt2 = call_ctxt + [split_bin_addr]
         ctxt2 = ' '.join ([str (len (ctxt2))] + map (hex, ctxt2))
-        f.write ('LoopBoundTiming %s %s\n' % (ctxt2, time))
-    f.close ()
+        data += 'LoopBoundTiming %s %s\n' % (ctxt2, time)
+    append_loop_bounds (data)
     trace ('Found bound %s for 0x%x in %s.' % (bound, split_bin_addr,
                                                loop_name))
 
 def save_extra_timing (nm, ctxt, time):
     ss = ['ExtraTiming', nm, str (len (ctxt))] + map (hex, ctxt) + [str(time)]
-    f = open ('%s/LoopBounds.txt' % target_objects.target_dir, 'a')
-    f.write (' '.join (ss) + '\n')
-    f.close ()
+    append_loop_bounds (' '.join (ss) + '\n')
 
 def parse_bound (ss, n):
     addr = syntax.parse_int (ss[n])

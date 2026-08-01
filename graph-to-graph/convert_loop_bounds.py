@@ -54,17 +54,14 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
             print ('WARNING: %s is in phantom_preempt.py but has no loop heads in '
                    'loop_counts.py' % f)
             continue
-        heads = sorted(lbfs[f])
-        if isinstance(v, list):
-            for head in v:
-                if head not in lbfs[f]:
-                    print ('WARNING: phantom_preempt.py lists %s head %s, which is '
-                           'not a loop head' % (f, hex(head)))
-        elif v is True and len(heads) > 1:
-            print ('WARNING: %s is True in phantom_preempt.py but has %d loop heads (%s), '
-                   'list the ones that contain a preemptionPoint'
-                   % (f, len(heads), ' '.join(map(hex, heads))))
-    if funs_with_phantom_preempt:
+        assert isinstance(v, list), 'phantom_preempt.py entries must be head lists: %s' % f
+        for head in v:
+            if head not in lbfs[f]:
+                print ('WARNING: phantom_preempt.py lists %s head %s, which is '
+                       'not a loop head' % (f, hex(head)))
+    # only the full pass writes this
+    preempt_annotations_file = None
+    if funs_with_phantom_preempt and (-1 in worker_ids):
         preempt_annotations_file = open(phantomPreemptsAnnoFileName(target_dir), 'w')
     #print 'funs_with_phantom_preempt: %s' % str(funs_with_phantom_preempt)
     bin_heads = loopHeadsToWorkOn(lbfs, funs_with_phantom_preempt, worker_ids)
@@ -79,8 +76,9 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
         if isPhantomHead(funs_with_phantom_preempt, f, head):
              # the ILP preemption limit is the real bound
              ret = (10 ** 9, 'phantom_preempt')
-             preempt_annotations_file.write("#" + f + "\n")
-             preempt_annotations_file.write("[%s]:phantom_preemp_point\n\n" % hex(head))
+             if preempt_annotations_file:
+                 preempt_annotations_file.write("#" + f + "\n")
+                 preempt_annotations_file.write("[%s]:phantom_preemp_point\n\n" % hex(head))
 
              print '%s injected with phantom preemption point' % f
         else:
@@ -107,7 +105,7 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
         else:
             lbfs[f][head] = (ret[0],ret[1], old_worker)
         imm_utils.genLoopheads(lbfs, target_objects.target_dir, incremental_head=(f,head))
-    if funs_with_phantom_preempt:
+    if preempt_annotations_file:
         preempt_annotations_file.close()
     unex_unbounded_funcs = set([(f, head) for (f, head) in funs_with_unbounded_loop
                                  if not isPhantomHead(funs_with_phantom_preempt, f, head)])

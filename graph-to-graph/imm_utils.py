@@ -6,6 +6,8 @@
 
 import sys
 import re
+import os
+import fcntl
 from elf_file import elfFile
 from addr_utils import phyAddrP
 
@@ -17,6 +19,15 @@ def genLoopheads(bin_loops_by_fs, dir_name, incremental_head=None ):
     write all loop heads with current bound (can be dummy) to dir_name/loop_counts.py
     If incremental_head is specified (as (function_name, head)), reload from loop_counts and update only that entry from bin_loops_by_fs. This allows us to manually edit loop_counts.py while the tool is running.
     '''
+    # workers run concurrently
+    lock_f = open('%s/loop_counts.lock' % dir_name, 'w')
+    try:
+        fcntl.flock(lock_f, fcntl.LOCK_EX)
+        writeLoopheads(bin_loops_by_fs, dir_name, incremental_head)
+    finally:
+        lock_f.close()
+
+def writeLoopheads(bin_loops_by_fs, dir_name, incremental_head):
     loop_counts_file_name = '%s/loop_counts.py' % dir_name
     if incremental_head is not None:
         context = {}
@@ -27,13 +38,25 @@ def genLoopheads(bin_loops_by_fs, dir_name, incremental_head=None ):
     else:
         lbfs = bin_loops_by_fs
 
-    h_f = open(loop_counts_file_name,'w')
+    num_workers = int(os.environ.get('GRAPH_REFINE_WORKERS', '0'))
+    f_worker = {}
+    if num_workers > 0:
+        # biggest functions first, each to the least-loaded worker
+        loads = [0] * num_workers
+        for f in sorted(lbfs, key=lambda f: (-len(lbfs[f]), f)):
+            worker = min(range(num_workers), key=lambda w: (loads[w], w))
+            f_worker[f] = worker
+            loads[worker] += len(lbfs[f])
+
+    h_f = open(loop_counts_file_name + '.tmp','w')
     h_f.write('loops_by_fs = {\n')
-    imm_l_f = open ('%s/imm_counts' % dir_name,'w')
+    imm_l_f = open ('%s/imm_counts.tmp' % dir_name,'w')
     worker = 0
     worker_load = 0
     for f in sorted(lbfs):
-        if worker_load >= MIN_WORKER_LOAD:
+        if num_workers > 0:
+            worker = f_worker[f]
+        elif worker_load >= MIN_WORKER_LOAD:
             worker += 1
             worker_load = 0
         loops = lbfs[f]
@@ -55,6 +78,8 @@ def genLoopheads(bin_loops_by_fs, dir_name, incremental_head=None ):
     h_f.write('}\n')
     h_f.close()
     imm_l_f.close()
+    os.rename(loop_counts_file_name + '.tmp', loop_counts_file_name)
+    os.rename('%s/imm_counts.tmp' % dir_name, '%s/imm_counts' % dir_name)
 
 class immEdge:
     def __init__ (self,targ,targ_valid=True,emit=True):
