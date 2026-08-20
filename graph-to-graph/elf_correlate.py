@@ -140,7 +140,8 @@ class immFunc (Borg):
               #the 0 worker_id will get ignored by genLoopHeads.
               #FIXME: do this properly..
               loops_by_fs[f][x] = (2**30,'dummy',0)
-        assert loopheads
+        if not loopheads:
+          print 'no loop heads reachable from %s' % self.name
         for p_nf in loopheads:
           p_n, f = p_nf
           p = self.f_problems[f]
