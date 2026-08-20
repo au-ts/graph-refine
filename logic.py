@@ -605,7 +605,7 @@ def mk_align_valid_ineq (typ, p):
         align = typ.align ()
         size = mk_times (syntax.arch.mk_word(typ.size ()), num)
         size_req = [mk_array_size_ineq (typ, num, p)]
-    assert align in [1, 4, 8]
+    assert align > 0 and align & (align - 1) == 0, align
     w0 = syntax.arch.mk_word(0)
     if align > 1:
         align_req = [mk_eq (mk_bwand (p, syntax.arch.mk_word(align - 1)), w0)]
