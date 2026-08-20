@@ -9,6 +9,7 @@ from subprocess import Popen, PIPE
 import graph_refine.trace_refute as trace_refute
 import conflict
 import cplex
+import elf_file
 
 def silence():
     '''
@@ -37,9 +38,8 @@ def unsilence(save_fds, null_fds):
     return (save_fds, null_fds)
 
 def auto_infea(dir_name, entry_point_function, manual_conflicts_file, results_dir, initial_case_iteration, preemption_limit):
-    kernel_elf_file = dir_name+'/kernel.elf'
+    kernel_elf_file = '%s/%s.elf' % (dir_name, elf_file.elfBase(dir_name))
     tcfg_map = dir_name + '/%s.imm.map' % entry_point_function
-    kernel_elf_file = dir_name+'/kernel.elf'
     ilp_nofooter = cplex.stripFooter(dir_name + '/%s.imm.ilp' % entry_point_function)
 
     auto_refutes_file = results_dir+'/refutes.txt'

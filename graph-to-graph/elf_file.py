@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
+import os
 import re
 from graph_refine.target_objects import functions, functions_by_tag
 import graph_refine.problem as problem
@@ -11,6 +12,16 @@ from borg import Borg
 
 #hardcoded list of function(s) that should never be called given correctness
 deadend_funcs = ['halt']
+
+# kernel.elf.txt if there is one, else the only <base>.elf.txt
+def elfBase (dir_name):
+    if os.path.exists('%s/kernel.elf.txt' % dir_name):
+        return 'kernel'
+    bases = sorted(f[:-len('.elf.txt')] for f in os.listdir(dir_name)
+                   if f.endswith('.elf.txt'))
+    if len(bases) != 1:
+        return None
+    return bases[0]
 
 # decompiler addresses are 32 bit
 elf_arch = 'armv7'
@@ -43,12 +54,14 @@ class elfFile (Borg):
         Borg.__init__(self)
         if not (dir_name):
            return
+        base = elfBase(dir_name)
         try:
-            self.f_text = open('%s/kernel.elf.txt' %dir_name)
-            self.f_symtab = open('%s/kernel.elf.symtab' %dir_name)
+            self.f_text = open('%s/%s.elf.txt' % (dir_name, base))
+            self.f_symtab = open('%s/%s.elf.symtab' % (dir_name, base))
         except :
-            print "kernel.elf.* can't be opened at directory %s" %dir_name
+            print "no <base>.elf.txt / .symtab pair at directory %s" %dir_name
             assert 0
+        self.elf_base = base
         self.elf_only = elf_only
         if not elf_only:
             self.asm_fs = dict ([(x,functions[x]) for x in functions_by_tag['ASM']])

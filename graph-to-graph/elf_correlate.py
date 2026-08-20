@@ -359,6 +359,8 @@ class immFunc (Borg):
         self.deadend_g_ns = set()
         #Halt is a deadend function, and should never be called, it's equivalent to Err for our purpose
         for dead_f in elfFile().deadend_funcs:
+          if dead_f not in elfFile().funcs:
+            continue
           print 'dead_f %s' % dead_f
           deadend_f_g_n = elfFile().funcs[dead_f].addr
           self.deadend_g_ns.add (deadend_f_g_n)

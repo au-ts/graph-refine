@@ -1210,6 +1210,9 @@ def get_functions_with_tag (tag):
                   if tag in pre_pairings[f]])
     visit.update ([pair.funs[tag] for f in pairings
                    for pair in pairings[f] if tag in pair.funs])
+    # no pairings, take every function with the tag
+    if not visit:
+        visit = set (target_objects.functions_by_tag.get (tag, set ()))
     funs = set (visit)
     while visit:
         f = visit.pop ()

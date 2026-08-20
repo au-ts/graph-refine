@@ -50,11 +50,12 @@ def parseTxt ():
       #ingore empty lines and the header
       if line in ['\n','\r\n']:
         continue
+      # the file name in the header varies by target
       if elf_arch == 'armv7':
-        header = re.search('kernel\.elf:\s*file\s*format\s*elf32-littlearm',line)
+        header = re.search('file\s*format\s*elf32-littlearm',line)
         header2 = re.search('Disassembly of section \..*:',line)
       elif elf_arch == 'rv64':
-        header = re.search('kernel\.(elf|o):\s*file\s*format\s*elf64-littleriscv', line)
+        header = re.search('file\s*format\s*elf64-littleriscv', line)
         header2 = re.search('Disassembly of section \..*:', line)
       else:
         print 'Unsupported arch %s' % elf_arch
@@ -87,8 +88,6 @@ def parseTxt ():
       else:
         #check if this is a literal line
         literal = re.search('(?P<addr>.*):\s*[a-f0-9]+\s*(?P<size>(\.word)|(\.short)|(\.byte))\s*(?P<value>0x[a-f0-9]+)$',line)
-        print line
-        print literal
         if literal != None:
            if literal.group('size') == '.word':
                 size = 4
