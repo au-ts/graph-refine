@@ -581,8 +581,7 @@ def inductive_bin_search (p, split, restrs, hyps, l_hyps):
         return rep.test_hyp_whyps (syntax.mk_not (continue_to_split_guess),
                                    [hyp] + l_hyps + hyps)
 
-    # findLoopBoundBS always checks to at least 16
-    min_bound = 16
+    min_bound = inductive_min_bound[0]
     max_bound = max_acceptable_bound[0]
     bound = upDownBinSearch (min_bound, max_bound, test)
     if bound != None and test (bound):
@@ -616,8 +615,9 @@ def search_bound (p, restrs, hyps, split):
     # try a naive bin search first
     # limit this to a small bound for time purposes
     #   - for larger bounds the less naive approach can be faster
+    # the inductive search returns no less than inductive_min_bound
     bound = findLoopBoundBS(split, p, restrs=restrs, hyps=hyps,
-                            try_seq = [0, 1, 6])
+                            try_seq = [0, 1, 6, inductive_min_bound[0]])
     if bound != None:
         return (bound, 'NaiveBinSearch')
 
@@ -723,6 +723,8 @@ def add_loop_bound_restrs_hyps (p, restrs, hyps, split, bound, ctxt):
     return (restrs, hyps)
 
 max_acceptable_bound = [1000000]
+
+inductive_min_bound = [16]
 
 functions_hash = [None]
 
