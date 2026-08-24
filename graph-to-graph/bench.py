@@ -23,18 +23,10 @@ import conflict
 
 chronos_executable = "../../chronos4.2/est"
 
-fast_path = [
-'fastpath_restore',
-'fastpath_call',
-'fastpath_reply_wait',
-'slowpath'
-]
-
+# keep in sync with skip_functions in target.py
 dummy_funs = [
-'idle_thread', 'halt',
-# keep in sync with skip_functions in target-RISCV64.py
-'c_handle_syscall', 'init_freemem', 'fastpath_reply_recv',
-] + fast_path
+'idle_thread', 'halt', 'init_freemem',
+]
 
 #funs called by boot_funs only
 boot_funs_called = [

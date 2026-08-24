@@ -25,9 +25,10 @@ f = open ('%s/CFunctions.txt' % target_dir)
 syntax.parse_and_install_all (f, 'C')
 f.close ()
 
+# skipping the fastpath would drop its loop heads
 #f = open ('%s/ASMFunctions_stack.txt' % target_dir)
 f = open('%s/ASMFunctions.txt' % target_dir)
-(astructs, afunctions, aconst_globals) = syntax.parse_and_install_all(f, 'ASM', skip_functions=['fastpath_call', 'fastpath_reply_recv', 'c_handle_syscall', 'init_freemem'])
+(astructs, afunctions, aconst_globals) = syntax.parse_and_install_all(f, 'ASM', skip_functions=['init_freemem'])
 f.close ()
 assert not astructs
 assert not aconst_globals
@@ -85,6 +86,17 @@ make_pairings ()
 
 import inst_logic
 inst_logic.add_inst_specs ()
+
+# the decompiler does not see NORETURN
+noreturn_expected = set (['c_handle_exception', 'c_handle_interrupt',
+                          'c_handle_syscall', 'exception', 'fastpath_call',
+                          'fastpath_reply_recv', 'halt', 'idle_thread',
+                          'interrupt', 'ki_boot_end', 'restore_user_context',
+                          'slowpath', 'syscall'])
+# and the generated sret stubs
+noreturn_expected |= set ([f for f in afunctions
+                           if f.startswith ("instruction'sret_")])
+logic.cut_noreturn_conts (afunctions, expected = noreturn_expected)
 
 # boot-only, keep the bound search out
 boot_function_limits = {'init_kernel': 0}
