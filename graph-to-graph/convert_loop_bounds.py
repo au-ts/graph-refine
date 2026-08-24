@@ -73,6 +73,8 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
         if f not in lbfs:
             lbfs[f] = {}
         ret= None
+        # downgraded to 'incomplete' wherever the search gave up early
+        failure = 'refuted'
         if isPhantomHead(funs_with_phantom_preempt, f, head):
              # the ILP preemption limit is the real bound
              ret = (10 ** 9, 'phantom_preempt')
@@ -86,9 +88,11 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
                 ret = loop_bounds.get_bound_super_ctxt(head,[],
                     known_bound_only = cached_only)
             except problem.Abort, e:
+                failure = 'incomplete'
                 print 'failed to analyse %s, problem aborted' % f
             except AssertionError, e:
                 # uncuttable fused cycle, record the head as failed
+                failure = 'incomplete'
                 traceback.print_exc()
                 print 'failed to analyse %s, assertion failure: %s' % (f, e)
             except:
@@ -99,7 +103,7 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
             if cached_only:
                 comment = 'did not find cached result'
             else:
-                comment = 'ignore: failed'
+                comment = 'ignore: %s' % failure
             lbfs[f][head] = (2**30, comment, old_worker)
             funs_with_unbounded_loop.add((f, head))
         else:
@@ -110,12 +114,28 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
     unex_unbounded_funcs = set([(f, head) for (f, head) in funs_with_unbounded_loop
                                  if not isPhantomHead(funs_with_phantom_preempt, f, head)])
     if unex_unbounded_funcs:
-        print ('functions with unbounded loop and not bounded by preemption: %s'
-               % ', '.join('%s@%s' % (f, hex(head))
-                            for (f, head) in sorted(unex_unbounded_funcs)))
+        by_verdict = {}
+        for (f, head) in unex_unbounded_funcs:
+            desc = lbfs[f][head][1]
+            verdict = desc.split(': ', 1)[1] if ': ' in desc else desc
+            by_verdict.setdefault(verdict, []).append((f, head))
+        print 'functions with unbounded loop and not bounded by preemption, by verdict:'
+        for verdict in sorted(by_verdict):
+            print '  %s: %s' % (verdict,
+                ', '.join('%s@%s' % (f, hex(head))
+                          for (f, head) in sorted(by_verdict[verdict])))
         # failing a worker would abort the others
         if -1 in worker_ids:
             return None
+    if -1 in worker_ids:
+        still_ignored = [(f, head) for f in lbfs for head in lbfs[f]
+                         if 'ignore' in lbfs[f][head][1]
+                         and not isPhantomHead(funs_with_phantom_preempt, f, head)]
+        if still_ignored:
+            print ('loops still marked ignore in loop_counts.py '
+                   '(need entries in assumed_loop_bounds.py): %s'
+                   % ', '.join('%s@%s' % (f, hex(head))
+                                for (f, head) in sorted(still_ignored)))
     return lbfs
 
 if __name__== '__main__':
