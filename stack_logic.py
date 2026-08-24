@@ -565,6 +565,7 @@ def get_loop_virtual_stack_analysis (p, tag):
     preds = dict (p.preds)
     preds['Ret'] = [n for n in preds['Ret'] if p.node_tags[n][0] == tag]
     preds['Err'] = [n for n in preds['Err'] if p.node_tags[n][0] == tag]
+    preds['Exit'] = [n for n in preds['Exit'] if p.node_tags[n][0] == tag]
     vds = logic.compute_var_deps (adj_nodes,
                                   adjusted_var_dep_outputs (p), preds)
 

@@ -450,7 +450,7 @@ class Problem:
                 if n2 not in reachable:
                     reachable[n2] = True
                     visit.append (n2)
-        for n in list (self.nodes) + ['Ret', 'Err']:
+        for n in list (self.nodes) + ['Ret', 'Err', 'Exit']:
             if n not in reachable:
                 reachable[n] = False
         self.cached_analysis[k] = reachable
@@ -468,7 +468,7 @@ class Problem:
 
         reachable = dict ([(self.get_entry (t), True)
                            for t in self.tags ()])
-        for n in self.tarjan_order + ['Ret', 'Err']:
+        for n in self.tarjan_order + ['Ret', 'Err', 'Exit']:
             if n in reachable:
                 continue
             reachable[n] = bool ([pred for pred in self.preds[n]
@@ -548,6 +548,8 @@ def graph_node_tooltip (nodes, n):
         return 'Error point'
     if n == 'Ret':
         return 'Return point'
+    if n == 'Exit':
+        return 'Exit point'
     node = nodes[n]
     if node.kind == 'Call':
         return "%s: call to '%s'" % (n, sanitise_str (node.fname))
@@ -599,10 +601,12 @@ def make_graph (nodes, cols, node_tags = {}, entries = []):
         graph.append ('%s [%s\n label="%s"\n tooltip="%s"];' % (n,
                                                                 f, n_nm, graph_node_tooltip (nodes, n)))
         for (c, l) in graph_edges (nodes, n):
-            if c in ['Ret', 'Err']:
+            if c in ['Ret', 'Err', 'Exit']:
                 c_nm = '%s_%s' % (c, n)
                 if c == 'Ret':
                     f2 = f + ', shape=doubleoctagon'
+                elif c == 'Exit':
+                    f2 = f + ', shape=octagon'
                 else:
                     f2 = f + ', shape=Mdiamond'
                 graph.append ('%s [label="%s", %s];'

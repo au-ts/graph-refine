@@ -558,7 +558,7 @@ class GraphSlice:
         if pc_envs == []:
             return None
 
-        if n == 'Err':
+        if n in ['Err', 'Exit']:
             # we'll never care about variable values here
             # and there are sometimes a LOT of arcs to Err
             # so we save a lot of merge effort

@@ -241,6 +241,9 @@ instruction_name_aliases = {
     'dsb_sy': 'dsb',
 }
 
+# see logic.cut_noreturn_conts
+noreturn_instructions = set (['sret'])
+
 def add_impl_fun (impl_fname, regspecs):
     #assert  False
     l_fname = 'l_' + impl_fname
@@ -344,7 +347,8 @@ def mk_bin_inst_spec (fname):
     assert len (regspecs) == len (regs), (fname, regs, regspecs)
     inp_regs = [reg for (reg, d) in zip (regs, regspecs) if d == 'I']
     out_regs = [reg for (reg, d) in zip (regs, regspecs) if d == 'O']
-    call = syntax.Node ('Call', 'Ret', ('l_' + impl_fname,
+    cont = 'Exit' if base_ident in noreturn_instructions else 'Ret'
+    call = syntax.Node ('Call', cont, ('l_' + impl_fname,
                                         [syntax.mk_var (reg, wordT) for reg in inp_regs]
                                         + [syntax.mk_token (ident)]
                                         + [syntax.mk_var (nm, typ) for (nm, typ) in bin_globs],

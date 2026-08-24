@@ -631,11 +631,53 @@ def compute_preds (nodes):
     preds = dict_list ([(c, n) for n in nodes
                         for c in nodes[n].get_conts ()],
                        keys = nodes)
-    for n in ['Ret', 'Err']:
+    for n in ['Ret', 'Err', 'Exit']:
         preds.setdefault (n, [])
     preds = dict ([(n, sorted (set (ps)))
                    for (n, ps) in preds.iteritems ()])
     return preds
+
+def can_reach_ret (fun, noreturn):
+    visit = [fun.entry]
+    seen = set ()
+    while visit:
+        n = visit.pop ()
+        if n == 'Ret':
+            return True
+        if n in seen or n not in fun.nodes:
+            continue
+        seen.add (n)
+        node = fun.nodes[n]
+        if node.kind == 'Call' and node.fname in noreturn:
+            continue
+        visit.extend (node.get_conts ())
+    return False
+
+def derive_noreturn (funs):
+    noreturn = set ()
+    while True:
+        new = set ([nm for (nm, fun) in funs.iteritems ()
+                    if nm not in noreturn
+                    if fun.entry and fun.nodes
+                    if not can_reach_ret (fun, noreturn)])
+        if not new:
+            return noreturn
+        noreturn.update (new)
+
+# send calls to non-returning functions to Exit
+def cut_noreturn_conts (funs, expected = None):
+    noreturn = derive_noreturn (funs)
+    if expected != None and noreturn != set (expected):
+        raise Exception ('non-returning functions are %s, expected %s'
+                         % (sorted (noreturn), sorted (expected)))
+    cut = 0
+    for fun in funs.itervalues ():
+        for node in fun.nodes.itervalues ():
+            if (node.kind == 'Call' and node.fname in noreturn
+                    and node.cont not in ['Err', 'Exit']):
+                node.cont = 'Exit'
+                cut += 1
+    return (noreturn, cut)
 
 def simplify_node_elementary(node):
     if node.kind == 'Cond' and node.cond == true_term:
@@ -849,6 +891,7 @@ def compute_var_deps (nodes, outputs, preds, override_lvals_rvals = {},
     visit = set ()
     visit.update (preds['Ret'])
     visit.update (preds['Err'])
+    visit.update (preds['Exit'])
 
     nodes = contextual_cond_simps (nodes, preds)
 
@@ -872,7 +915,7 @@ def compute_var_deps (nodes, outputs, preds, override_lvals_rvals = {},
         for c in node.get_conts ():
             if c == 'Ret':
                 cont_vs.update (outputs (n))
-            elif c == 'Err':
+            elif c in ['Err', 'Exit']:
                 pass
             else:
                 cont_vs.update (var_deps.get (c, []))

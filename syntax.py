@@ -945,8 +945,9 @@ def parse_typ(bits, n, symbolic_types = False):
     else:
         assert not 'type encoded', (n, bits[n:], bits)
 
+# 'Exit' is control leaving the model, 'Err' is unreachable
 def node_name (name):
-    if name in {'Ret':True, 'Err':True}:
+    if name in {'Ret':True, 'Err':True, 'Exit':True}:
         return name
     else:
         try:
@@ -1263,7 +1264,7 @@ def get_expr_typ(expr):
 def check_cfg (fun, warnings = None):
     dead_arcs = [(n, n2) for (n, node) in fun.nodes.iteritems ()
                  for n2 in node.get_conts ()
-                 if n2 not in fun.nodes and n2 not in ['Ret', 'Err']]
+                 if n2 not in fun.nodes and n2 not in ['Ret', 'Err', 'Exit']]
     for (n, n2) in dead_arcs:
         assert type (n2) != str
         # dead arcs go to Err
