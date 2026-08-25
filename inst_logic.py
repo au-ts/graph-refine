@@ -227,7 +227,7 @@ instruction_fun_specs_rv64 = {
     'csrrw_sscratch':   ("impl'csrrw_sscratch", ["O", "I"]),
     'sc_w':             ("impl'sc_w", ["I","O","I"]),
     'wfi':              ("impl'wfi", []),
-    'sret':             ("sret", []),
+    'sret':             ("impl'sret", []),
     'ebreak':           ("impl'ebreak", []),
     'ecall':            ("impl'ecall", ["I", "I", "I", "I", "O"]),
     'rdtime':           ("impl'rdtime", ["O"]),
