@@ -27,7 +27,7 @@ def loopDot(head,p):
       else:
         text = ''
       n_cap = '%s / %d \n %s' % (hex(phy_n),n, text)
-      if [x for x in p.nodes[n].get_conts() if x not in ns and not x == 'Err']:
+      if [x for x in p.nodes[n].get_conts() if x not in ns and x not in ['Err', 'Exit']]:
         print 'found exit node ! %d' % n
         nodes[n] = pydot.Node(n_cap,color="blue")
       else:

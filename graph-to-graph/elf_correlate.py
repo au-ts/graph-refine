@@ -55,10 +55,10 @@ class immFunc (Borg):
            self.loaded_loops_by_fs = loadCounts(elfFile().dir_name)
            self.loaded_loop_counts = True
 
-    def process(self):
+    def process(self, imm_graph=True):
         if self.bbs != {}:
             return
-        self.makeBinGraph()
+        self.makeBinGraph(imm_graph=imm_graph)
         self.loopheads = {}
         self.findLoopheads()
         lbfs = self.loops_by_fs
@@ -142,6 +142,8 @@ class immFunc (Borg):
               loops_by_fs[f][x] = (2**30,'dummy',0)
         if not loopheads:
           print 'no loop heads reachable from %s' % self.name
+        if not getattr(self, 'has_imm_graph', True):
+          return
         for p_nf in loopheads:
           p_n, f = p_nf
           p = self.f_problems[f]
@@ -217,6 +219,8 @@ class immFunc (Borg):
           return True
         elif p_n == 'Ret':
           return False
+        elif p_n == 'Exit':
+          return False
         if self.isRealNode(p_nf):
           return False
         if self.phyAddr(p_nf)=='RetToCaller':
@@ -243,6 +247,8 @@ class immFunc (Borg):
     #whether p_n leads straightly to RetToCaller
     def isStraightToRetToCaller(self,p_nf):
         p_n,f = p_nf
+        if p_n == 'Exit':
+          return False
         if p_n == 'Ret':
           if f != self.name:
             return True
@@ -312,11 +318,13 @@ class immFunc (Borg):
         """
         return f.startswith ("instruction'")
 
-    def makeBinGraph(self):
+    def makeBinGraph(self, imm_graph=True):
         """
         Prepare problems for all functions transitively called by self,
-        and turn this into a binary CFG
+        and turn this into a binary CFG.  With imm_graph False, stop
+        after the problems.
         """
+        self.has_imm_graph = imm_graph
         self.f_problems = {}
         if self.name not in elfFile().tcg:
             print elfFile().tcg.keys()
@@ -336,6 +344,9 @@ class immFunc (Borg):
         print 'all problems generated'
         self.findAllDeadends()
         print "all deadends found"
+        if not imm_graph:
+            # findBBs asserts on a node with no successors
+            return
         #now generate the bin graph
 
         for f,p in self.f_problems.iteritems():
@@ -450,7 +461,7 @@ class immFunc (Borg):
           if fun_called not in self.f_problems:
               # step over calls to skipped or stub functions
               print 'pNodeConts: no problem for callee %s, skipping call' % fun_called
-              p_conts = filter(lambda x: x != 'Err', p_node.get_conts())
+              p_conts = filter(lambda x: x not in ['Err', 'Exit'], p_node.get_conts())
               pf_conts = [(x, f) for x in p_conts]
               return p_node, pf_conts
           p = self.f_problems[fun_called]
@@ -458,7 +469,7 @@ class immFunc (Borg):
           pf_conts = [(entry,fun_called)]
           return p_node, pf_conts
         assert p_n != 'Ret'
-        p_conts = filter(lambda x: x != 'Err', p_node.get_conts())
+        p_conts = filter(lambda x: x not in ['Err', 'Exit'], p_node.get_conts())
         if no_deadends:
             p_conts = filter(lambda x: (x, p_i) not in pi_deadends, p_conts)
         pf_conts = [(x , f) for x in p_conts]
@@ -466,7 +477,7 @@ class immFunc (Borg):
 
     def isRealNode(self,p_nf):
         p_n,f = p_nf
-        if p_n == 'Ret':
+        if p_n in ['Ret', 'Exit']:
           return False
         g_n = self.phyAddr(p_nf)
         if g_n == 'RetToCaller':
@@ -513,7 +524,8 @@ class immFunc (Borg):
                 next_addrs = p.nodes[call_pn].get_conts()
                 assert len(next_addrs) == 1
                 next_addr = next_addrs[0]
-                assert next_addr not in ['Ret','Err']
+                if type(next_addr) == str:
+                    return
                 phy_next_addr = self.phyAddr((next_addr,f))
                 i_e = immEdge(phy_next_addr, emit = True)
                 node.addEdge(i_e)
@@ -580,16 +592,22 @@ class immFunc (Borg):
         #print "call_pn = %d" % call_pn
 
         suc = self.firstRealNodes( (call_pn, f) ,may_multi=False,may_call=True)
+        assert suc, ('no real node after the call at %s in %s (callee %s, conts %s)'
+                     % (p_n, f, self.funName((call_pn,f)),
+                        p.nodes[call_pn].get_conts()))
         pf_call_targ = suc[0]
         g_call_targ = self.phyAddr(pf_call_targ)
         #locate the call return address
         f_caller, _ = self.pNToFunGN(p_nf)
         is_tailcall = self.isCallTailCall(p_nf)
+        phy_ret_addr = None
         if not is_tailcall:
-            #return the return addr
-            phy_ret_addr = self.phyAddr(self.retPF((call_pn,f)))
-        else:
-            phy_ret_addr = None
+            ret_pf = self.retPF((call_pn,f))
+            if type(ret_pf[0]) == str:
+                # model as a tail call
+                is_tailcall = True
+            else:
+                phy_ret_addr = self.phyAddr(ret_pf)
 
         assert type(phy_ret_addr) == int or is_tailcall, "g_call_targ %s phy_ret_addr %s" % (g_call_targ, phy_ret_addr)
           #print 'call detected: phy_ret_addr %x' % phy_ret_addr

@@ -93,7 +93,7 @@ def analyseFunction(f,asm_fs,dir_name,gen_heads,load_counts,emit_graphs, stopAtI
     if emit_graphs:
         makeGraph(f,asm_fs)
 
-    imm_fun.process()
+    imm_fun.process(imm_graph = not gen_heads)
     if gen_heads:
       print 'generating loop heads'
       imm_utils.genLoopheads(imm_fun.bin_loops_by_fs,dir_name)
