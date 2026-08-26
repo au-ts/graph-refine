@@ -1146,7 +1146,8 @@ class GraphSlice:
         self.solv.add_pvalid_dom_assertions ()
         result = self.solv.parallel_test_hyps(interp_imps, PersistableModel({}))
         assert result[0] in [True, False], result
-        if result[0] == False:
+        # result[1] is None when every solver failed
+        if result[0] == False and result[1] != None:
             (hyps, hyp) = imps[result[1]]
             last_test[0] = (self.interpret_hyp (hyp), hyps, reqs)
             last_failed_test[0] = last_test[0]

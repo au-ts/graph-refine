@@ -763,7 +763,8 @@ def test_hyp_group (rep, group, detail = None):
     else:
         if detail:
             detail[0] = res_kind
-        return (res, group[i])
+        # i is None when every solver failed
+        return (res, group[i] if i != None else None)
 
 def failed_test_sets (p, checks):
     failed = []
