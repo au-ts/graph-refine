@@ -7,7 +7,8 @@
 import syntax
 
 import typed_commons
-from typed_commons import (CheckModelIterationState, CMIAbort, CMIContinue, CMIResult, OfflineSolverExecution, PersistableModel, SolverImpl)
+from typed_commons import (CheckModelIterationState, CMIAbort, CMIContinue, CMIResult, OfflineSolverExecution, PersistableModel, SolverImpl,
+                           note_solver_exit, solver_mem_mb, solver_cpu_s)
 import parallel_solver
 from parallel_solver import (ParallelTaskManager)
 
@@ -110,7 +111,7 @@ def parse_solver (bits):
     args = bits[3].split()
     assert os.path.exists (args[0]), (args[0], bits)
     if not fast:
-        timeout = 6000
+        timeout = solver_cpu_s
     else:
         timeout = 30
     solver = SolverImpl(name, fast, args, timeout)
@@ -189,6 +190,9 @@ def parse_config_change (config, solver):
 
 def load_solver_set ():
     import sys
+    if solver_mem_mb:
+        print ('solver.py: capping each offline solver at %d MB (RLIMIT_AS)'
+               % solver_mem_mb)
     solvers, strategy, model_strategy, online_solver, offline_solver = get_solver_set()
     fast_solvers = [sv for sv in solvers if sv.fast]
     slow_solvers = [sv for sv in solvers if not sv.fast]
@@ -619,7 +623,7 @@ def split_hyp (hyp):
     else:
         return [hyp]
 
-def preexec (timeout):
+def preexec (timeout, mem_mb = None):
     def ret ():
         # setting the session ID on a fork allows us to clean up
         # the resulting process group, useful if running multiple
@@ -628,7 +632,15 @@ def preexec (timeout):
         if timeout != None:
             resource.setrlimit(resource.RLIMIT_CPU,
                                (timeout, timeout))
+        if mem_mb:
+            # solvers allocate with mmap
+            lim = mem_mb * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (lim, lim))
     return ret
+
+# an online solver that hits the cap keeps restarting
+def offline_preexec (timeout):
+    return preexec (timeout, mem_mb = solver_mem_mb)
 
 class ConversationProblem (Exception):
     def __init__ (self, prompt, response):
@@ -1124,7 +1136,7 @@ class Solver:
         fd = open(filename,'r')
         proc = subprocess.Popen (solver.args,
                                  stdin = fd, stdout = subprocess.PIPE,
-                                 preexec_fn = preexec (timeout))
+                                 preexec_fn = offline_preexec (timeout))
         fd.close()
         if not keep_smt_dumps:
             os.unlink(filename)
@@ -1156,6 +1168,10 @@ class Solver:
 
         if response not in ['sat', 'unsat']:
             trace ('SMT conversation problem after (check-sat)')
+            rc = execution.process.wait ()
+            if rc:
+                trace ('%s exited %d without answering' % (solver.name, rc))
+            note_solver_exit (solver.name, rc)
 
         end = time.time ()
         trace ('Got %r from %s on problem %s' % (response,
@@ -1705,7 +1721,7 @@ class Solver:
     def narrow_unsat_core (self, solver, asserts):
         process = subprocess.Popen (solver[1],
                                     stdin = subprocess.PIPE, stdout = subprocess.PIPE,
-                                    preexec_fn = preexec (solver[2]))
+                                    preexec_fn = offline_preexec (solver[2]))
         self.write_solv_script (process.stdin, [], solver = solver,
                                 only_if_is_model = True)
         asserts = list (asserts)

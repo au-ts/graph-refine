@@ -55,6 +55,47 @@ CheckModelIterationVerdict = Union[CMIAbort, CMIResult, CMIContinue]
 # model repair process (cf. `check_model_iteration` below)."""
 
 
+# per-solver address space cap in MB, 0 for none
+solver_mem_mb = int(os.environ.get('GRAPH_REFINE_SOLVER_MEM_MB', '0'))
+
+# offline solver per-query cpu limit, in seconds
+solver_cpu_s = int(os.environ.get('GRAPH_REFINE_SOLVER_CPU_S', '6000'))
+
+# solvers that exited non-zero
+solver_resource_kills = []  # type: List[Tuple[str, str]]
+
+
+def note_solver_exit(solver_name, returncode):
+    # type: (str, Optional[int]) -> None
+    if returncode is None or returncode == 0:
+        return
+    if returncode == -signal.SIGXCPU:
+        cause = 'cpu'
+    elif returncode == -signal.SIGKILL:
+        # only the OOM killer or a cgroup limit kills a solver this way
+        cause = 'oom'
+    elif solver_mem_mb:
+        # exit codes on allocation failure differ per solver
+        cause = 'oom'
+    else:
+        cause = 'error'
+    solver_resource_kills.append((solver_name, cause))
+
+
+def clear_solver_resource_kills():
+    # type: () -> None
+    del solver_resource_kills[:]
+
+
+def solver_resource_verdict():
+    # type: () -> Optional[str]
+    causes = set([cause for (_, cause) in solver_resource_kills])
+    for cause in ['oom', 'cpu', 'error']:
+        if cause in causes:
+            return cause
+    return None
+
+
 class SolverContextProtocol(Protocol):
     """The protocol implemented by solver contexts such as `solver.Solver`.
 

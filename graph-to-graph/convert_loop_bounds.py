@@ -9,6 +9,7 @@ import graph_refine.trace_refute as trace_refute
 import graph_refine.target_objects as target_objects
 from graph_refine.target_objects import functions
 import graph_refine.problem as problem
+import graph_refine.typed_commons as typed_commons
 import imm_utils
 import sys
 import traceback
@@ -84,6 +85,7 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
 
              print '%s injected with phantom preemption point' % f
         else:
+            typed_commons.clear_solver_resource_kills()
             try:
                 ret = loop_bounds.get_bound_super_ctxt(head,[],
                     known_bound_only = cached_only)
@@ -103,6 +105,23 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
             if cached_only:
                 comment = 'did not find cached result'
             else:
+                # a killed solver looks like a finished search
+                kills = list(typed_commons.solver_resource_kills)
+                if kills:
+                    kind = {'oom': 'oom', 'cpu': 'timeout'}.get(
+                        typed_commons.solver_resource_verdict(), 'solver-error')
+                    if failure == 'refuted':
+                        failure = kind
+                    else:
+                        failure = '%s (%s)' % (failure, kind)
+                    tally = {}
+                    for k in kills:
+                        tally[k] = tally.get(k, 0) + 1
+                    print ('%s@%s: %s -- %d solver process(es) killed: %s'
+                           % (f, hex(head), failure, len(kills),
+                              ', '.join('%dx %s/%s' % (n, sv, cause)
+                                        for ((sv, cause), n)
+                                        in sorted(tally.items()))))
                 comment = 'ignore: %s' % failure
             lbfs[f][head] = (2**30, comment, old_worker)
             funs_with_unbounded_loop.add((f, head))

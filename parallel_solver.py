@@ -704,8 +704,14 @@ class ParallelTaskManager:
         assert isinstance(original_state, OfflineSolverExecution)
         out, err = original_state.process.communicate()
         the_raw_response = out.splitlines()
+        returncode = original_state.process.returncode
         original_state.kill()
         the_outcome = self.extract_outcome_from_smt_response(the_raw_response)  # type: TaskOutcome
+        if the_outcome == TaskOutcome.failed:
+            if returncode:
+                self.log.warning('%s exited %d without answering'
+                                 % (original_state.solver.name, returncode))
+            typed_commons.note_solver_exit(original_state.solver.name, returncode)
         finished_state = TaskStateFinished(original_state.solver, original_state.filename, the_outcome, the_raw_response)
         self.task_pool[task_id] = self.task_with_state(the_task, finished_state)
         self.perform_bogus_model_check(task_id)
