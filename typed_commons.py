@@ -87,6 +87,70 @@ def clear_solver_resource_kills():
     del solver_resource_kills[:]
 
 
+# '<pid> <start time>' per solver, lets a parent kill a dead child's solvers
+solver_pidfile = None
+
+
+def _proc_starttime(pid):
+    # type: (int) -> Optional[str]
+    # start time guards against pid reuse. count fields from the closing paren
+    try:
+        with open('/proc/%d/stat' % pid) as f:
+            data = f.read()
+        return data[data.rindex(')') + 2:].split()[19]
+    except (IOError, OSError, ValueError, IndexError):
+        return None
+
+
+def note_solver_spawn(pid):
+    # type: (int) -> None
+    if not solver_pidfile:
+        return
+    start = _proc_starttime(pid)
+    if start is None:
+        return
+    try:
+        fd = os.open(solver_pidfile, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0644)
+        os.write(fd, '%d %s\n' % (pid, start))
+        os.close(fd)
+    except OSError:
+        pass
+
+
+def reap_registered_solvers():
+    # type: () -> int
+    if not solver_pidfile:
+        return 0
+    try:
+        with open(solver_pidfile) as f:
+            entries = [line.split() for line in f]
+    except (IOError, OSError):
+        return 0
+    killed = 0
+    for parts in entries:
+        if len(parts) != 2 or not parts[0].isdigit():
+            continue
+        pid = int(parts[0])
+        if pid <= 1 or _proc_starttime(pid) != parts[1]:
+            continue
+        try:
+            os.killpg(pid, signal.SIGKILL)
+            killed += 1
+        except OSError:
+            pass
+    return killed
+
+
+def clear_solver_registry():
+    # type: () -> None
+    if not solver_pidfile:
+        return
+    try:
+        os.unlink(solver_pidfile)
+    except OSError:
+        pass
+
+
 def solver_resource_verdict():
     # type: () -> Optional[str]
     causes = set([cause for (_, cause) in solver_resource_kills])

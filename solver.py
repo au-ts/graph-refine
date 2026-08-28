@@ -761,6 +761,7 @@ class Solver:
         self.online_solver = subprocess.Popen (solver.args,
                                                stdin = subprocess.PIPE, stdout = subprocess.PIPE,
                                                stderr = devnull, preexec_fn = preexec (solver.timeout))
+        typed_commons.note_solver_spawn (self.online_solver.pid)
         devnull.close ()
 
         # send_inner so a failure restarts in the caller's solver_loop
@@ -1137,6 +1138,7 @@ class Solver:
         proc = subprocess.Popen (solver.args,
                                  stdin = fd, stdout = subprocess.PIPE,
                                  preexec_fn = offline_preexec (timeout))
+        typed_commons.note_solver_spawn (proc.pid)
         fd.close()
         if not keep_smt_dumps:
             os.unlink(filename)
@@ -1722,6 +1724,7 @@ class Solver:
         process = subprocess.Popen (solver[1],
                                     stdin = subprocess.PIPE, stdout = subprocess.PIPE,
                                     preexec_fn = offline_preexec (solver[2]))
+        typed_commons.note_solver_spawn (process.pid)
         self.write_solv_script (process.stdin, [], solver = solver,
                                 only_if_is_model = True)
         asserts = list (asserts)
