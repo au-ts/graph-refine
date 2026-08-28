@@ -79,9 +79,9 @@ class Problem:
 
     def add_function (self, fun, tag, node_renames, loop_id = None):
         if not fun.entry:
-            printout ('Aborting %s: underspecified %s' % (
-                self.name, fun.name))
-            raise Abort ()
+            msg = 'underspecified %s' % fun.name
+            printout ('Aborting %s: %s' % (self.name, msg))
+            raise Abort (msg)
         node_renames.setdefault('Ret', 'Ret')
         node_renames.setdefault('Err', 'Err')
         new_node_renames = {}
@@ -508,8 +508,9 @@ def check_no_symbols (name, nodes):
     symbs = pseudo_compile.nodes_symbols (nodes)
     if not symbs:
         return
-    printout ('Aborting %s: undefined symbols %s' % (name, symbs))
-    raise Abort ()
+    msg = 'undefined symbols %s' % (symbs, )
+    printout ('Aborting %s: %s' % (name, msg))
+    raise Abort (msg)
 
 # printing of problem graphs
 
@@ -780,11 +781,13 @@ def loop_heads_including_inner (p):
 def check_no_inner_loop (p, head):
     subs = loop_inner_loops (p, head)
     if subs:
+        msg = 'complex loop: sub-loops %s of loop at %s' % (
+            [h for (h, _) in subs], head)
         printout ('Aborting %s, complex loop' % p.name)
         trace ('  sub-loops %s of loop at %s' % (subs, head))
         for (h, _) in subs:
             trace ('    head %d tagged %s' % (h, p.node_tags[h]))
-        raise Abort ()
+        raise Abort (msg)
 
 def has_inner_loop (p, head):
     return bool (loop_inner_loops (p, head))
