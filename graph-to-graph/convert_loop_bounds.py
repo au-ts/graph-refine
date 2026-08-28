@@ -86,6 +86,7 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
              print '%s injected with phantom preemption point' % f
         else:
             typed_commons.clear_solver_resource_kills()
+            loop_bounds.clear_give_up_reasons()
             try:
                 ret = loop_bounds.get_bound_super_ctxt(head,[],
                     known_bound_only = cached_only)
@@ -100,6 +101,12 @@ def convert_loop_bounds(target_dir_name, worker_ids=None, cached_only=False):
             except:
                 print "Unexpected error:", sys.exc_info()
                 raise
+            # swallowed aborts and exhausted context splits are give-ups
+            if not loop_bounds.refutation_is_earned():
+                failure = 'incomplete'
+            if (ret == None or ret[1] == 'None') and loop_bounds.give_up_reasons:
+                print '%s@%s: search gave up: %s' % (
+                    f, hex(head), '; '.join(loop_bounds.give_up_reasons))
         old_worker = lbfs[f][head][2]
         if ret == None or ret[1]== 'None':
             if cached_only:

@@ -17,6 +17,7 @@ import target_objects
 import trace_refute
 import stack_logic
 import time
+import typed_commons
 
 #tryFun must take exactly 1 argument
 def downBinSearch(minimum, maximum, tryFun):
@@ -521,10 +522,14 @@ def get_bound_ctxt (split, call_ctxt, use_cache = True):
         match = (not call_ctxt2 or call_ctxt[- len (call_ctxt2):] == call_ctxt2)
         if match and use_cache and h == p_h and prev_bounds2 == prev_bounds:
             return bound
+    kill_count = len (typed_commons.solver_resource_kills)
     bound = search_bin_bound (p, restrs, hyps, split)
+    end = time.time ()
+    if bound == None and len (typed_commons.solver_resource_kills) > kill_count:
+        # don't cache a killed solver as a refutation
+        return bound
     known = known_bounds.setdefault (split_bin_addr, [])
     known.append ((call_ctxt, p_h, prev_bounds, bound))
-    end = time.time ()
     save_bound (False, split_bin_addr, call_ctxt, p_h, prev_bounds, bound,
                 time = end - start)
     return bound
@@ -573,6 +578,30 @@ def rab_test ():
     return getBinaryBoundFromC (p, c_tag, split, (), hyps)
 
 last_search_bound = [0]
+
+# why the current search stopped short
+give_up_reasons = []
+
+def clear_give_up_reasons ():
+    del give_up_reasons[:]
+
+def give_up (reason):
+    trace (reason)
+    give_up_reasons.append (reason)
+
+# reasons that leave part of the search unexplored
+give_up_reason_slugs = {
+    'abort:': 'incomplete-abort',
+    'cannot split by context (recursion)': 'incomplete-recursion',
+    'cannot split by context (context depth)': 'incomplete-ctxt-depth',
+    'cannot split by context (issues in': 'incomplete-ctxt-issues',
+    'call-context fan-out:': 'incomplete-fanout',
+}
+refutation_voiding_prefixes = tuple (give_up_reason_slugs)
+
+def refutation_is_earned ():
+    return not [r for r in give_up_reasons
+                if r.startswith (refutation_voiding_prefixes)]
 
 def inductive_bin_search (p, split, restrs, hyps, l_hyps):
     rep = rep_graph.mk_graph_slice (p, fast = True)
@@ -787,13 +816,19 @@ def get_bound_super_ctxt (split, call_ctxt, no_splitting=False,
     if known_bound_only:
         return None
     no_splitting_abort = [False]
+    kill_count = len (typed_commons.solver_resource_kills)
+    reasons_start = len (give_up_reasons)
     try:
         bound = get_bound_super_ctxt_inner (split, call_ctxt,
                                             no_splitting = (no_splitting, no_splitting_abort))
     except problem.Abort, e:
+        give_up_reasons.append ('abort: %s' % e)
         bound = None
     if no_splitting_abort[0]:
         # don't record this bound, since it might change if splitting was allowed
+        return bound
+    if bound == None and len (typed_commons.solver_resource_kills) > kill_count:
+        # don't cache a killed solver as a refutation
         return bound
     known = known_bounds.setdefault ((split, 'Global'), [])
     known.append ((call_ctxt, get_functions_hash (), bound))
@@ -837,34 +872,38 @@ def get_bound_super_ctxt_inner (split, call_ctxt,
     if bound:
         return bound
 
-    trace ('no bound found immediately.')
+    give_up ('no bound found immediately.')
 
     if no_splitting[0]:
         assert no_splitting[1], no_splitting
         no_splitting[1][0] = True
-        trace ('cannot split by context (recursion).')
+        give_up ('cannot split by context (recursion).')
         return None
 
     # try to split over potential call sites
     if len (call_ctxt) >= 3:
-        trace ('cannot split by context (context depth).')
+        give_up ('cannot split by context (context depth).')
         return None
 
     if len (call_sites) == 0:
         # either entry point or nonsense
-        trace ('cannot split by context (reached top level).')
+        give_up ('cannot split by context (reached top level).')
         return None
 
     problem_sites = [call_site for call_site in safe_call_sites
                      if not call_ctxt_computable (split, [call_site] + call_ctxt)]
     if problem_sites:
-        trace ('cannot split by context (issues in %s).' % problem_sites)
+        give_up ('cannot split by context (issues in %s).' % problem_sites)
         return None
 
     anc_bounds = [get_bound_super_ctxt (split, [call_site] + call_ctxt,
                                         no_splitting = True)
                   for call_site in safe_call_sites]
     if None in anc_bounds:
+        failed_sites = [hex (cs) for (cs, b) in zip (safe_call_sites, anc_bounds)
+                        if b == None]
+        give_up_reasons.append ('call-context fan-out: no bound from call site(s) %s.'
+                                % failed_sites)
         return None
     (bound, kind) = max (anc_bounds)
     return (bound, 'MergedBound')
@@ -1017,6 +1056,7 @@ def get_complex_loops ():
 def search_all_loops ():
     all_loops = get_all_loop_heads ()
     for (loop, _, _) in all_loops:
+        clear_give_up_reasons ()
         get_bound_super_ctxt (loop, [])
 
 main = search_all_loops
