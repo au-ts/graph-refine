@@ -4,9 +4,12 @@
 
 # System limits the WCET bounds depend on.
 
-N_EP = 16
+N_THREAD = 10
+N_SCHED_CONTEXT = 20
 
-N_RQ = 16
+N_EP = N_THREAD
+
+N_RQ = min(N_THREAD, N_SCHED_CONTEXT)
 
 B_SC = 8
 
@@ -15,6 +18,7 @@ N_REFILL = ((1 << B_SC) - 88) // 16
 # ceil(usage_max / MIN_BUDGET)
 N_BUDGET_REFILLS = 8
 
+assert N_THREAD >= 1 and N_SCHED_CONTEXT >= 1
 assert N_EP >= 1 and N_RQ >= 1
 assert B_SC >= 8, "below seL4_MinSchedContextBits no sched context can exist"
 assert N_REFILL >= 2, "refill_absolute_max(B_SC) must admit a non-degenerate ring"
@@ -23,6 +27,23 @@ assert N_BUDGET_REFILLS >= 1
 loop_bounds = {
     'invokeUntyped_Retype': {
         0x84010658: (32, 'relative', 'inlined memzero store loop, 256/8 stores per entry'),
+
+        0x840106a0: (16, 'relative',
+                     'resetUntypedCap short-region clearMemory: block_size < '
+                     'CONFIG_RESET_CHUNK_BITS = 8 on this branch, stride 8, '
+                     'so at most 2**7 / 8 stores'),
+    },
+
+    'createNewObjects': {
+        0x84006964: (256, 'relative',
+                     'one iteration per retyped object; destLength = nodeWindow '
+                     '<= CONFIG_RETYPE_FAN_OUT_LIMIT = 256, checked in '
+                     'decodeUntypedInvocation'),
+    },
+
+    'createObject': {
+        0x840067ec: ((1 << B_SC) // 8, 'relative',
+                     'memzero of a new sched context: 2**B_SC bytes, stride 8'),
     },
 
     'fastpath_call': {
