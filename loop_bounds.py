@@ -384,9 +384,9 @@ known_bound_restr_hyps = {}
 
 known_bounds = {}
 
-def serialise_bound (addr, bound_info):
+def serialise_bound (addr, bound_info, reason = None):
     if bound_info == None:
-        return [hex(addr), "None", "None"]
+        return [hex(addr), "None", reason or "None"]
     else:
         (bound, kind) = bound_info
         assert logic.is_int (bound)
@@ -401,12 +401,12 @@ def append_loop_bounds (data):
     os.close (fd)
 
 def save_bound (glob, split_bin_addr, call_ctxt, prob_hash, prev_bounds, bound,
-                time = None):
+                time = None, reason = None):
     f_names = [trace_refute.get_body_addrs_fun (x)
                for x in call_ctxt + [split_bin_addr]]
     loop_name = '<%s>' % ' -> '.join (f_names)
     comment = '# bound for loop in %s:' % loop_name
-    ss = ['LoopBound'] + serialise_bound (split_bin_addr, bound)
+    ss = ['LoopBound'] + serialise_bound (split_bin_addr, bound, reason)
     if glob:
         ss[0] = 'GlobalLoopBound'
     ss += [str (len (call_ctxt))] + map (hex, call_ctxt)
@@ -461,6 +461,8 @@ def load_bounds ():
         if bits[:1] not in [['LoopBound'], ['GlobalLoopBound']]:
             continue
         (n, (addr, bound)) = parse_bound (bits, 1)
+        # for a None bound, the kind slot holds why the search gave up
+        reason = bits[3] if bound == None else None
         (n, ctxt) = parse_ctxt (bits, n)
         prob_hash = parse_int (bits[n])
         n += 1
@@ -468,11 +470,11 @@ def load_bounds ():
             (n, prev_bounds) = parse_list (parse_bound, bits, n)
             assert n == len (bits), bits
             known = known_bounds.setdefault (addr, [])
-            known.append ((ctxt, prob_hash, prev_bounds, bound))
+            known.append ((ctxt, prob_hash, prev_bounds, bound, reason))
         else:
             assert n == len (bits), bits
             known = known_bounds.setdefault ((addr, 'Global'), [])
-            known.append ((ctxt, prob_hash, bound))
+            known.append ((ctxt, prob_hash, bound, reason))
     known_bounds['Loaded'] = True
 
 def get_bound_ctxt (split, call_ctxt, use_cache = True):
@@ -518,20 +520,25 @@ def get_bound_ctxt (split, call_ctxt, use_cache = True):
     if not known_bounds:
         load_bounds ()
     known = known_bounds.get (split_bin_addr, [])
-    for (call_ctxt2, h, prev_bounds2, bound) in known:
+    for (call_ctxt2, h, prev_bounds2, bound, reason) in known:
         match = (not call_ctxt2 or call_ctxt[- len (call_ctxt2):] == call_ctxt2)
         if match and use_cache and h == p_h and prev_bounds2 == prev_bounds:
+            if bound == None and reason != 'refuted':
+                # cached give-up, search again
+                continue
             return bound
     kill_count = len (typed_commons.solver_resource_kills)
+    reasons_start = len (give_up_reasons)
     bound = search_bin_bound (p, restrs, hyps, split)
     end = time.time ()
     if bound == None and len (typed_commons.solver_resource_kills) > kill_count:
         # don't cache a killed solver as a refutation
         return bound
+    reason = give_up_slug (give_up_reasons[reasons_start:])
     known = known_bounds.setdefault (split_bin_addr, [])
-    known.append ((call_ctxt, p_h, prev_bounds, bound))
+    known.append ((call_ctxt, p_h, prev_bounds, bound, reason))
     save_bound (False, split_bin_addr, call_ctxt, p_h, prev_bounds, bound,
-                time = end - start)
+                time = end - start, reason = reason)
     return bound
 
 def problem_hash (p):
@@ -599,9 +606,16 @@ give_up_reason_slugs = {
 }
 refutation_voiding_prefixes = tuple (give_up_reason_slugs)
 
+# first reason that voids a refutation, else 'refuted'
+def give_up_slug (reasons):
+    for r in reasons:
+        for prefix in refutation_voiding_prefixes:
+            if r.startswith (prefix):
+                return give_up_reason_slugs[prefix]
+    return 'refuted'
+
 def refutation_is_earned ():
-    return not [r for r in give_up_reasons
-                if r.startswith (refutation_voiding_prefixes)]
+    return give_up_slug (give_up_reasons) == 'refuted'
 
 def inductive_bin_search (p, split, restrs, hyps, l_hyps):
     rep = rep_graph.mk_graph_slice (p, fast = True)
@@ -805,8 +819,11 @@ def get_bound_super_ctxt (split, call_ctxt, no_splitting=False,
                           known_bound_only=False):
     if not known_bounds:
         load_bounds ()
-    for (ctxt2, fn_hash, bound) in known_bounds.get ((split, 'Global'), []):
+    for (ctxt2, fn_hash, bound, reason) in known_bounds.get ((split, 'Global'), []):
         if ctxt2 == call_ctxt and fn_hash == get_functions_hash ():
+            if bound == None and reason != 'refuted':
+                # cached give-up, search again
+                continue
             return bound
     min_loop_addr = addr_to_loop_id (split)
     if min_loop_addr != split:
@@ -830,9 +847,11 @@ def get_bound_super_ctxt (split, call_ctxt, no_splitting=False,
     if bound == None and len (typed_commons.solver_resource_kills) > kill_count:
         # don't cache a killed solver as a refutation
         return bound
+    reason = give_up_slug (give_up_reasons[reasons_start:])
     known = known_bounds.setdefault ((split, 'Global'), [])
-    known.append ((call_ctxt, get_functions_hash (), bound))
-    save_bound (True, split, call_ctxt, get_functions_hash (), None, bound)
+    known.append ((call_ctxt, get_functions_hash (), bound, reason))
+    save_bound (True, split, call_ctxt, get_functions_hash (), None, bound,
+                reason = reason)
     return bound
 
 from trace_refute import (function_limit, ctxt_within_function_limits)
@@ -982,7 +1001,7 @@ def mk_timing_metrics ():
     probs = [(split_bin_addr, tuple (call_ctxt), bound)
              for (split_bin_addr, known) in known_bounds.iteritems ()
              if type (split_bin_addr) == int
-             for (call_ctxt, h, prev_bounds, bound) in known]
+             for (call_ctxt, h, prev_bounds, bound, reason) in known]
     probs = set (probs)
     data = [(split, ctxt, bound,
              loop_bound_difficulty_estimates (split, list (ctxt)))
