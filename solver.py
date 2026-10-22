@@ -748,10 +748,11 @@ class Solver:
                                                stderr = devnull, preexec_fn = preexec (solver.timeout))
         devnull.close ()
 
+        # send_inner so a failure restarts in the caller's solver_loop
         for msg in self.preamble (solver):
-            self.send (msg, replay=False)
+            self.send_inner (msg, replay=False)
         for (msg, _) in self.replayable:
-            self.send (msg, replay=False)
+            self.send_inner (msg, replay=False)
 
     def close (self, reason = '?'):
         self.close_online_solver ()
@@ -797,9 +798,9 @@ class Solver:
     def solver_loop (self, attempt):
         err = None
         for i in range (5):
-            if self.online_solver == None:
-                self.startup_solver ()
             try:
+                if self.online_solver == None:
+                    self.startup_solver ()
                 return attempt ()
             except ConversationProblem, e:
                 trace ('SMT conversation problem (attempt %d)'
@@ -807,7 +808,7 @@ class Solver:
                 trace ('I sent %s' % repr (e.prompt))
                 trace ('I got %s' % repr (e.response))
                 trace ('restarting solver')
-                self.online_solver = None
+                self.close_online_solver ()
                 err = (e.prompt, e.response)
         trace ('Repeated SMT failure, giving up.')
         raise ConversationProblem (err[0], err[1])
