@@ -393,7 +393,7 @@ def serialise_bound (addr, bound_info, reason = None):
         (bound, kind) = bound_info
         assert logic.is_int (bound)
         assert str (kind) == kind
-        return [hex (addr), str (bound), kind]
+        return [hex (addr), str (bound), escape_kind (kind)]
 
 # single O_APPEND write so workers don't interleave
 def append_loop_bounds (data):
@@ -441,8 +441,26 @@ def parse_bound (ss, n):
         return (n + 3, (addr, None))
     else:
         bound = syntax.parse_int (bound)
-        kind = ss[n + 2]
-        return (n + 3, (addr, (bound, kind)))
+        (n, kind) = parse_kind (ss, n + 2)
+        return (n, (addr, (bound, kind)))
+
+# kinds can contain a space. old files have it unescaped
+def escape_kind (kind):
+    assert '%' not in kind, kind
+    return kind.replace (' ', '%20')
+
+def parse_kind (ss, n):
+    kind = ss[n].replace ('%20', ' ')
+    n += 1
+    # raw kind from an old file
+    while n < len (ss):
+        try:
+            syntax.parse_int (ss[n])
+            break
+        except ValueError:
+            kind = '%s %s' % (kind, ss[n])
+            n += 1
+    return (n, kind)
 
 def parse_ctxt_id (bits, n):
     return (n + 1, syntax.parse_int (bits[n]))
@@ -619,6 +637,32 @@ def give_up_slug (reasons):
 def refutation_is_earned ():
     return give_up_slug (give_up_reasons) == 'refuted'
 
+# for a loop whose head does not cut its body, bound visits to a cut node
+def search_complex_loop_bound (p, restrs, hyps, split):
+    cut = logic.get_one_loop_splittable (p, set (p.loop_body (split)))
+    if cut == None:
+        trace ('no cut node for complex loop at %d' % split)
+        return None
+    trace ('complex loop at %d: bounding total visits to cut node %d' %
+           (split, cut))
+    bound = findLoopBoundBS (cut, p, restrs = restrs, hyps = hyps,
+                             try_seq = [0, 1, 6, 34, 130, 514])
+    if bound == None:
+        return None
+    addr = node_bin_addr (p, cut)
+    if addr == None:
+        trace ('no binary address for cut node %d, discarding bound' % cut)
+        return None
+    return (bound, 'CutNodeBinSearch absolute@%s' % hex (addr))
+
+def node_bin_addr (p, n):
+    for (_, p2, _, addr_map) in call_ctxt_problems:
+        if p2 is p:
+            for (addr, node) in addr_map.iteritems ():
+                if node == n:
+                    return addr
+    return None
+
 def inductive_bin_search (p, split, restrs, hyps, l_hyps):
     rep = rep_graph.mk_graph_slice (p, fast = True)
 
@@ -657,9 +701,8 @@ def search_peeled_bound (p, restrs, hyps, split):
 def search_bound (p, restrs, hyps, split):
     last_search_bound[0] = (p, restrs, hyps, split)
 
-    # a head that does not cut its own body is left to the C fallback
     if problem.has_inner_loop (p, split):
-        return None
+        return search_complex_loop_bound (p, restrs, hyps, split)
 
     # try a naive bin search first
     # limit this to a small bound for time purposes
@@ -1040,7 +1083,9 @@ def save_timing_metrics (num):
         if bound == None:
             bdata = "1000000 7"
         else:
-            bdata = '%d %d' % (bound[0], bound_kind_nums[bound[1]])
+            # kind may carry a suffix (CutNodeBinSearch absolute@...)
+            bdata = '%d %d' % (bound[0],
+                bound_kind_nums.get (bound[1].split (' ')[0], 0))
         (l_i, f_i, ct_i) = ests
         f.write ('%s %s %s %s %s %r %s\n' % (short_name, l_i, f_i, ct_i,
                                              bdata, col, time))
