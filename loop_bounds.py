@@ -89,6 +89,8 @@ def findLoopBoundBS(p_n, p, restrs=None, hyps=None, try_seq=None):
             bound_try_seq = [0,1,20]
         else:
             bound_try_seq = [0,1,20,34]
+        # 34 is too low for 64-bit lookup loops
+        bound_try_seq = bound_try_seq + [syntax.arch.word_type.num + 4]
     else:
         bound_try_seq = try_seq
     rep = mk_graph_slice (p, fast = True)
