@@ -151,7 +151,7 @@ GRAPH_REFINE := python2 ${GREF_ROOT}/graph-refine.py
 
 ${TARGET_DIR}/StackBounds.txt: ${GRAPH_REFINE_INPUTS}
 	# FIXME: this script is arch-specific (RISCV64)
-	python3 ${GREF_ROOT}/tools/stack_bounds.py --asm-functions ${TARGET_DIR}/ASMFunctions.txt --elf-txt ${TARGET_DIR}/kernel.elf.txt > $@
+	python3 ${GREF_ROOT}/tools/stack_bounds.py --optimisation $(patsubst -%,%,${CONFIG_OPTIMISATION_LEVEL}) --asm-functions ${TARGET_DIR}/ASMFunctions.txt --elf-txt ${TARGET_DIR}/kernel.elf.txt > $@
 
 ${TARGET_DIR}/demo-report.txt: ${TARGET_DIR}/StackBounds.txt ${GRAPH_REFINE_INPUTS}
 	${GRAPH_REFINE} ${TARGET_DIR} trace-to:$@.partial deps:Kernel_C.cancelAllIPC
@@ -178,23 +178,27 @@ default: report
 
 # WCET (worst-case execution time) targets
 
+SMT_DUMPS ?= 1
+export GRAPH_REFINE_SMT_DUMPS := ${SMT_DUMPS}
+
 GTG := ${GREF_ROOT}/graph-to-graph/
-TARGET_DIR_ABS := $(realpath TARGET_DIR)
+TARGET_DIR_ABS := $(abspath ${TARGET_DIR})
 
 ${TARGET_DIR}/loop_counts_1.py: ${TARGET_DIR}/StackBounds.txt ${GRAPH_REFINE_INPUTS}
-	cd ${GTG} && python graph_to_graph.py ${TARGET_DIR_ABS} handleSyscall --l
+	cd ${GTG} && python2 graph_to_graph.py ${TARGET_DIR_ABS} handleSyscall --l --a rv64
 	cp ${TARGET_DIR}/loop_counts.py $@
 
 ${TARGET_DIR}/lb_reports/report_%.txt: ${TARGET_DIR}/loop_counts_1.py
 	@mkdir -p ${TARGET_DIR}/lb_reports
-	cd ${GTG} && python convert_loop_bounds.py --worker-id $* ${TARGET_DIR_ABS} &> ${TARGET_DIR_ABS}/lb_reports/pre-report_$*.txt
+	cd ${GTG} && python2 convert_loop_bounds.py --worker_id $* ${TARGET_DIR_ABS} > ${TARGET_DIR_ABS}/lb_reports/pre-report_$*.txt 2>&1
 	tail -n 500 ${TARGET_DIR}/lb_reports/pre-report_$*.txt > $@
 	rm ${TARGET_DIR}/lb_reports/pre-report_$*.txt
 
-ALL_LB_REPORTS := $(patsubst %, ${TARGET_DIR}/lb_reports/report_%.txt, 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 )
+LB_WORKER_IDS := 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
+ALL_LB_REPORTS := $(patsubst %, ${TARGET_DIR}/lb_reports/report_%.txt, ${LB_WORKER_IDS})
 
 ${TARGET_DIR}/lb_reports/fin_report.txt: ${ALL_LB_REPORTS}
-	cd ${GTG} && python convert_loop_bounds.py $* ${TARGET_DIR_ABS} &> ${TARGET_DIR_ABS}/lb_reports/pre-freport.txt
+	cd ${GTG} && python2 convert_loop_bounds.py ${TARGET_DIR_ABS} > ${TARGET_DIR_ABS}/lb_reports/pre-freport.txt 2>&1
 	mv ${TARGET_DIR}/lb_reports/pre-freport.txt $@
 
 lb: ${TARGET_DIR}/lb_reports/fin_report.txt
