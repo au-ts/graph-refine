@@ -631,8 +631,10 @@ def refute (inp_fname, out_fname, prev_fnames, instance = None):
             print 'EXCEPTION in handling %s, %s' % (ctxt, arcs)
             for s in ss[:3]:
                 print s
-            if len (ss) > 3:
+            if len (ss) > 4:
                 print '...'
+            if len (ss) > 3:
+                print ss[-1]
     serialise_verdicts (out_fname)
     print 'Found new refutations: %s' % bool (new_refutes)
     return (bool (new_refutes), report)
