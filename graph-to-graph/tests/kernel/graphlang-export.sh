@@ -63,8 +63,9 @@ end
 end
 END
 )"
+# l4v/proof/ROOT already defines SimplExport
 ROOT="$(cat <<END
-session SimplExport = AsmRefine +
+session GraphLangExport = AsmRefine +
     theories "tmp"
 END
 )"
