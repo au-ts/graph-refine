@@ -17,6 +17,7 @@ import target_objects
 import trace_refute
 import stack_logic
 import time
+import json
 import typed_commons
 
 #tryFun must take exactly 1 argument
@@ -429,6 +430,28 @@ def save_bound (glob, split_bin_addr, call_ctxt, prob_hash, prev_bounds, bound,
     trace ('Found bound %s for 0x%x in %s.' % (bound, split_bin_addr,
                                                loop_name))
 
+def save_search_ladder (fname, split_bin_addr, call_ctxt, bound, searches,
+                        give_up):
+    # one JSON record per (head, context)
+    record = {
+        'function': fname,
+        'head': hex (split_bin_addr),
+        'call_ctxt': map (hex, call_ctxt),
+        'verdict': bound_outcome (bound),
+        'searches': searches,
+        'give_up_reasons': give_up,
+    }
+    reports_dir = '%s/lb_reports' % target_objects.target_dir
+    if not os.path.isdir (reports_dir):
+        try:
+            os.makedirs (reports_dir)
+        except OSError:
+            pass
+    fd = os.open ('%s/search_ladder.jsonl' % reports_dir,
+                  os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0644)
+    os.write (fd, json.dumps (record) + '\n')
+    os.close (fd)
+
 def save_extra_timing (nm, ctxt, time):
     ss = ['ExtraTiming', nm, str (len (ctxt))] + map (hex, ctxt) + [str(time)]
     append_loop_bounds (' '.join (ss) + '\n')
@@ -663,6 +686,32 @@ def node_bin_addr (p, n):
                     return addr
     return None
 
+# one entry per search_bound call
+search_ladder = []
+
+# tactics return a bare count or (count, kind)
+def bound_outcome (bound):
+    if bound == None:
+        return None
+    if isinstance (bound, tuple):
+        (n, kind) = bound
+        return {'bound': n, 'kind': kind}
+    return {'bound': bound, 'kind': None}
+
+# from the cached loop var analysis
+def loop_var_analysis_hint (p, split):
+    k = ('search_loop_var_analysis', split)
+    if k not in p.cached_analysis:
+        return 'not computed'
+    counts = {}
+    for (v, kind) in p.cached_analysis[k]:
+        if kind[0] == 'LoopLinearSeries':
+            kind = kind[0]
+        counts[kind] = counts.get (kind, 0) + 1
+    if 'LoopLinearSeries' not in counts:
+        counts['_hint'] = 'no linear-series variable recovered'
+    return counts
+
 def inductive_bin_search (p, split, restrs, hyps, l_hyps):
     rep = rep_graph.mk_graph_slice (p, fast = True)
 
@@ -700,34 +749,62 @@ def search_peeled_bound (p, restrs, hyps, split):
 
 def search_bound (p, restrs, hyps, split):
     last_search_bound[0] = (p, restrs, hyps, split)
+    tactics = []
+
+    def finish (bound):
+        search_ladder.append ({'split': split, 'tactics': tactics,
+                               'loop_var_analysis': loop_var_analysis_hint (p, split)})
+        return bound
 
     if problem.has_inner_loop (p, split):
-        return search_complex_loop_bound (p, restrs, hyps, split)
+        start = time.time ()
+        bound = search_complex_loop_bound (p, restrs, hyps, split)
+        tactics.append ({'name': 'ComplexLoopCutNodeSearch', 'params': {},
+                         'seconds': time.time () - start,
+                         'outcome': bound_outcome (bound)})
+        search_ladder.append ({'split': split, 'tactics': tactics,
+                               'loop_var_analysis': 'not computed'})
+        return bound
 
     # try a naive bin search first
     # limit this to a small bound for time purposes
     #   - for larger bounds the less naive approach can be faster
     # the inductive search returns no less than inductive_min_bound
-    bound = findLoopBoundBS(split, p, restrs=restrs, hyps=hyps,
-                            try_seq = [0, 1, 6, inductive_min_bound[0]])
+    try_seq = [0, 1, 6, inductive_min_bound[0]]
+    start = time.time ()
+    bound = findLoopBoundBS(split, p, restrs=restrs, hyps=hyps, try_seq = try_seq)
+    tactics.append ({'name': 'NaiveBinSearch', 'params': {'try_seq': try_seq},
+                     'seconds': time.time () - start, 'outcome': bound_outcome (bound)})
     if bound != None:
-        return (bound, 'NaiveBinSearch')
+        return finish ((bound, 'NaiveBinSearch'))
 
     l_hyps = get_linear_series_hyps (p, split, restrs, hyps)
+    start = time.time ()
     bound = inductive_bin_search (p, split, restrs, hyps, l_hyps)
+    tactics.append ({'name': 'InductiveBinSearch',
+                     'params': {'min': inductive_min_bound[0],
+                                'max': max_acceptable_bound[0]},
+                     'seconds': time.time () - start, 'outcome': bound_outcome (bound)})
     if bound != None:
-        return (bound, 'InductiveBinSearch')
+        return finish ((bound, 'InductiveBinSearch'))
 
     # let the naive bin search go a bit further
+    start = time.time ()
     bound = findLoopBoundBS(split, p, restrs=restrs, hyps=hyps)
+    tactics.append ({'name': 'NaiveBinSearch', 'params': {'try_seq': 'default'},
+                     'seconds': time.time () - start, 'outcome': bound_outcome (bound)})
     if bound != None:
-        return (bound, 'NaiveBinSearch')
+        return finish ((bound, 'NaiveBinSearch'))
 
+    start = time.time ()
     bound = search_peeled_bound (p, restrs, hyps, split)
+    tactics.append ({'name': 'PeeledInductiveBinSearch',
+                     'params': {'peel_try_seq': list (peel_try_seq[0])},
+                     'seconds': time.time () - start, 'outcome': bound_outcome (bound)})
     if bound != None:
-        return bound
+        return finish (bound)
 
-    return None
+    return finish (None)
 
 def getBinaryBoundFromC (p, c_tag, asm_split, restrs, hyps):
     c_heads = [h for h in search.init_loops_to_split (p, restrs)
@@ -879,6 +956,7 @@ def get_bound_super_ctxt (split, call_ctxt, no_splitting=False,
         return None
     no_splitting_abort = [False]
     kill_count = len (typed_commons.solver_resource_kills)
+    ladder_start = len (search_ladder)
     reasons_start = len (give_up_reasons)
     try:
         bound = get_bound_super_ctxt_inner (split, call_ctxt,
@@ -889,6 +967,9 @@ def get_bound_super_ctxt (split, call_ctxt, no_splitting=False,
     if no_splitting_abort[0]:
         # don't record this bound, since it might change if splitting was allowed
         return bound
+    save_search_ladder (trace_refute.get_body_addrs_fun (split), split, call_ctxt,
+                        bound, search_ladder[ladder_start:],
+                        give_up_reasons[reasons_start:])
     if bound == None and len (typed_commons.solver_resource_kills) > kill_count:
         # don't cache a killed solver as a refutation
         return bound
