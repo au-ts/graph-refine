@@ -13,6 +13,8 @@
 # branch specific part (riscv branch)
 L4V_ARCH?=RISCV64
 L4V_FEATURES?=MCS
+# the l4v sub-makes read these from the environment
+export L4V_ARCH L4V_FEATURES
 
 ifndef CONFIG_OPTIMISATION_LEVEL
   CONFIG_OPTIMISATION_LEVEL := -O1
@@ -105,8 +107,7 @@ IGNORES_RISCV64 := # TODO
 
 KERNEL_ALL_PP_FILES := ${L4V_KERNEL_BUILD_PATH}/kernel_all.c_pp ${KERNEL_BUILD_ROOT}/kernel_all.c_pp
 
-# FIXME: This should be a prerequisite of some other essential target,
-#        but for convenience during development, it is currently not.
+# CFunctions.txt depends on this, so the C and ASM graphs come from the same kernel.
 ${TARGET_DIR}/.diff: ${KERNEL_ALL_PP_FILES}
 	diff -q --ignore-matching-lines='^#' ${KERNEL_ALL_PP_FILES}
 	@mkdir -p ${TARGET_DIR}
@@ -129,7 +130,7 @@ ${TARGET_DIR}/ASMFunctions.txt: ${TARGET_DIR}/ASMFunctions.raw ${TARGET_DIR}/ker
 	# sfence_vma fix-up
 	sed -i 's/sfence_vma/sfence.vma/g' $@
 
-${TARGET_DIR}/CFunctions.txt: ${L4V_KERNEL_BUILD_PATH}/kernel_all.c_pp ${L4V_REPO_PATH}/tools/asmrefine/*.thy
+${TARGET_DIR}/CFunctions.txt: ${TARGET_DIR}/.diff ${L4V_KERNEL_BUILD_PATH}/kernel_all.c_pp ${L4V_REPO_PATH}/tools/asmrefine/*.thy
 	@mkdir -p ${TARGET_DIR}
 	MAKEFILES= make -C ${L4V_REPO_PATH}/proof/ SimplExport
 	# FIXME: the following path should really depend on L4V_FEATURES.
